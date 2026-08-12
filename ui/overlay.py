@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -35,6 +37,7 @@ from PySide6.QtWidgets import (
 from utils.system_info import centered_rect, screen_for_cursor
 from core.ai_engine import AIEngine
 
+from .history import HistoryStore
 from .components import SearchBar, StreamingMarkdown
 
 log = logging.getLogger(__name__)
@@ -70,6 +73,8 @@ class Overlay(QWidget):
         self._quit_requested = False
         self._busy = False
         self._engine: AIEngine | None = None
+        self._history: HistoryStore | None = None
+        self._last_submitted = ""
 
         self._build_ui()
         self.apply_theme("dark")
@@ -100,6 +105,14 @@ class Overlay(QWidget):
         self.status.hide()
         top_row.addWidget(self.status)
         layout.addLayout(top_row)
+
+        self.history_list = QListWidget(self.card)
+        self.history_list.setObjectName("historyList")
+        self.history_list.setMaximumHeight(190)
+        self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.history_list.hide()
+        self.history_list.itemActivated.connect(self._on_history_selected)
+        layout.addWidget(self.history_list)
 
         self.output = StreamingMarkdown(self.card)
         layout.addWidget(self.output, stretch=1)
@@ -142,6 +155,8 @@ class Overlay(QWidget):
         if self._busy or self._engine is None:
             return
         self._busy = True
+        self._last_submitted = text
+        self._hide_history()
         self.output.begin_stream()
         self._set_status("thinking…")
         self._engine.submit(text)
@@ -157,6 +172,11 @@ class Overlay(QWidget):
         anchor = f" · {provider}" if provider else ""
         self._busy = False
         self.output.finalize_stream()
+        if self._history is not None and self._last_submitted:
+            try:
+                self._history.add(self._last_submitted, full, provider)
+            except Exception:
+                log.exception("failed to record history entry")
         self._set_status(f"done{anchor}", flash_ms=2500)
 
     def _on_stream_failed(self, message: str, provider: str = "") -> None:
@@ -176,9 +196,45 @@ class Overlay(QWidget):
 
     # -- interaction between search list and size --------------------------
 
+    def set_history(self, store: HistoryStore) -> None:
+        self._history = store
+
     def _on_text_changed(self, text: str) -> None:
-        # Placeholder: history list + auto-expand arrives in later steps.
-        del text
+        if self._busy:
+            self._hide_history()
+            return
+        needle = text.strip()
+        store = self._history
+        if store is None:
+            self._hide_history()
+            return
+        results = store.search(needle, limit=12) if needle else store.recent(limit=6)
+        self._populate_history(results)
+
+    def _populate_history(self, rows: list) -> None:
+        widget = self.history_list
+        widget.clear()
+        for row in rows:
+            item = QListWidgetItem(row["query"])
+            item.setToolTip(row["query"])
+            item.setData(Qt.UserRole, row["id"])
+            widget.addItem(item)
+        if widget.count() == 0:
+            self._hide_history()
+            return
+        widget.show()
+        widget.setCurrentRow(0)
+
+    def _hide_history(self) -> None:
+        self.history_list.hide()
+
+    def _on_history_selected(self, item) -> None:
+        if self._history is None:
+            return
+        query = item.text()
+        self.search.setText(query)
+        self.search.setCursorPosition(len(query))
+        self._hide_history()
 
     # -- theming -----------------------------------------------------------
 
@@ -214,6 +270,7 @@ class Overlay(QWidget):
             if self.output.current_markdown():
                 self.output.begin_stream()
             self.status.hide()
+            self._hide_history()
 
         self.show()
         self.raise_()
@@ -283,6 +340,9 @@ class Overlay(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             event.accept()
+            if self.history_list.isVisible():
+                self._hide_history()
+                return
             self._fade_out()
             self._emit_cancelled()
             return

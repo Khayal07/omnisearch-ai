@@ -30,6 +30,58 @@ def overlay(qtbot):
     return win
 
 
+class TestOverlayHistory:
+    def test_typing_populates_suggestions(self, qtbot, tmp_path):
+        from ui.history import HistoryStore
+
+        store = HistoryStore(tmp_path / "h.db")
+        store.add("draw a dog", "ok", "openai")
+        store.add("draw a cat", "ok", "openai")
+        store.add("sing a song", "ok", "openai")
+
+        win = Overlay()
+        qtbot.addWidget(win)
+        win.set_history(store)
+        win.show()
+        win.search.setFocus()
+        win.search.setText("draw")
+        assert win.history_list.isVisible()
+        assert win.history_list.count() == 2
+        texts = [win.history_list.item(i).text() for i in range(win.history_list.count())]
+        assert "draw a dog" in texts
+        win.dismiss()
+        store.close()
+
+    def test_empty_history_hides_list(self, qtbot, tmp_path):
+        from ui.history import HistoryStore
+
+        store = HistoryStore(tmp_path / "h.db")
+        win = Overlay()
+        qtbot.addWidget(win)
+        win.set_history(store)
+        win.show()
+        win.search.setText("nothing here")
+        assert not win.history_list.isVisible()
+        win.dismiss()
+        store.close()
+
+    def test_empty_input_shows_recent(self, qtbot, tmp_path):
+        from ui.history import HistoryStore
+
+        store = HistoryStore(tmp_path / "h.db")
+        store.add("recent query", "ok", "openai")
+        win = Overlay()
+        qtbot.addWidget(win)
+        win.set_history(store)
+        win.show()
+        win.search.setFocus()
+        win._on_text_changed("")
+        assert win.history_list.isVisible()
+        assert win.history_list.item(0).text() == "recent query"
+        win.dismiss()
+        store.close()
+
+
 class TestOverlayWindow:
     def test_frameless_tool_flags(self, overlay):
         flags = overlay.windowFlags()
