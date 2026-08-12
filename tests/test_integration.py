@@ -99,9 +99,64 @@ class TestE2EStream:
             assert "Hello world" in win.output.toPlainText()
 
             assert len(done_count) == 2
+            # Consecutive queries CONTINUE the same conversation.
             convs = hist.list_conversations()
-            assert [c["title"] for c in convs] == ["question two", "question one"]
-            assert hist.total_messages() == 4
+            assert len(convs) == 1
+            msgs = hist.conversation_messages(convs[0]["id"])
+            assert [m["role"] for m in msgs] == ["user", "assistant", "user", "assistant"]
+            assert msgs[0]["content"] == "question one"
+            assert msgs[-1]["content"] == "Hello world"
+            win.dismiss()
+        finally:
+            engine.stop()
+            hist.close()
+
+    def test_new_chat_opens_a_fresh_conversation(self, qtbot, tmp_path, mocker):
+        body = "".join(
+            [_stream_openai_line("Hello "), _stream_openai_line("world"), "data: [DONE]\n"]
+        )
+
+        def client_factory():
+            return httpx.AsyncClient(
+                timeout=10,
+                transport=httpx.MockTransport(
+                    lambda req: httpx.Response(200, text=body)
+                ),
+            )
+
+        mocker.patch.object(ai_engine, "_build_client", side_effect=client_factory)
+
+        from core.ai_engine import AIEngine
+
+        hist = HistoryStore(tmp_path / "newc.db")
+        cfg = _cfg(tmp_path)
+        engine = AIEngine(cfg)
+        win = Overlay()
+        win.set_history(hist)
+        win.attach_engine(engine)
+        qtbot.addWidget(win)
+        win.show()
+
+        try:
+            win.search.setText("query one")
+            with qtbot.waitSignal(engine.done, timeout=5000):
+                QTest.keyClick(win.search, Qt.Key_Return)
+            qtbot.waitUntil(lambda: win._busy is False, timeout=2000)
+            assert len(hist.list_conversations()) == 1
+
+            win.start_new_chat()
+            assert win._active_conversation is None
+            assert not win.new_chat_btn.isVisible()
+
+            win.search.setText("query two")
+            with qtbot.waitSignal(engine.done, timeout=5000):
+                QTest.keyClick(win.search, Qt.Key_Return)
+            qtbot.waitUntil(lambda: win._busy is False, timeout=2000)
+
+            convs = hist.list_conversations()
+            assert len(convs) == 2
+            assert convs[0]["title"] == "query two"
+            assert convs[1]["title"] == "query one"
             win.dismiss()
         finally:
             engine.stop()

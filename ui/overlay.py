@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -127,6 +128,14 @@ class Overlay(QWidget):
         top_row = QHBoxLayout()
         top_row.addWidget(self.search, stretch=1)
 
+        self.new_chat_btn = QPushButton("New chat", self.card)
+        self.new_chat_btn.setObjectName("newChatButton")
+        self.new_chat_btn.setToolTip("Start a fresh conversation")
+        self.new_chat_btn.setCursor(Qt.PointingHandCursor)
+        self.new_chat_btn.clicked.connect(self.start_new_chat)
+        top_row.addWidget(self.new_chat_btn)
+        self.new_chat_btn.hide()
+
         self.status = QLabel("", self.card)
         self.status.setObjectName("statusLabel")
         self.status.hide()
@@ -135,7 +144,7 @@ class Overlay(QWidget):
 
         self.history_list = QListWidget(self.card)
         self.history_list.setObjectName("historyList")
-        self.history_list.setMaximumHeight(190)
+        self.history_list.setMaximumHeight(260)
         self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.history_list.hide()
         self.history_list.itemActivated.connect(self._on_history_selected)
@@ -195,12 +204,27 @@ class Overlay(QWidget):
             prior = store.conversation_messages(conv_id)
             context = [{"role": m["role"], "content": m["content"]} for m in prior]
             store.append_message(conv_id, "user", text)
+            self._sync_new_chat_btn()
             self.output.replace_content(format_conversation(prior + [{"role": "user", "content": text}]))
         else:
             self.output.begin_stream()
 
         self._set_status("thinking…")
         self._engine.submit(text, context=context)
+
+    def start_new_chat(self) -> None:
+        """Disconnect from the current conversation; the next query opens a fresh chat."""
+        self._active_conversation = None
+        self._last_submitted = ""
+        self.output.begin_stream()
+        self.status.hide()
+        self.new_chat_btn.hide()
+        self.search.clear()
+        self.search.setFocus(Qt.ActiveWindowFocusReason)
+        self._update_size_state()
+
+    def _sync_new_chat_btn(self) -> None:
+        self.new_chat_btn.setVisible(self._active_conversation is not None)
 
     def _on_stream_start(self, provider: str) -> None:
         self.status.setText(f"streaming · {provider}")
@@ -220,22 +244,20 @@ class Overlay(QWidget):
             self.output.replace_content(format_conversation(store.conversation_messages(conv_id)))
         else:
             self.output.finalize_stream()
-        self._active_conversation = None
         self._set_status(f"done{anchor}", flash_ms=2500)
         self._update_size_state()
+        self._sync_new_chat_btn()
 
     def _on_stream_failed(self, message: str, provider: str = "") -> None:
         self._busy = False
         self.output.add_stream(f"\n\n**Error** · {message}")
         self.output.finalize_stream(reset_buffer=False)
-        self._active_conversation = None
         self._set_status("error", flash_ms=5000)
         self._update_size_state()
 
     def _on_stream_cancelled(self) -> None:
         self._busy = False
         self.output.finalize_stream(reset_buffer=False)
-        self._active_conversation = None
         self._set_status("cancelled", flash_ms=1800)
         self._update_size_state()
 
@@ -287,9 +309,9 @@ class Overlay(QWidget):
             self._update_size_state()
             return
         results = (
-            store.search_conversations(needle, limit=12)
+            store.search_conversations(needle, limit=50)
             if needle
-            else store.list_conversations(limit=6)
+            else store.list_conversations(limit=200)
         )
         self._populate_history(results)
         self._update_size_state()
@@ -326,6 +348,7 @@ class Overlay(QWidget):
         self.output.replace_content(format_conversation(messages))
         self._hide_history()
         self._update_size_state()
+        self._sync_new_chat_btn()
 
     # -- theming -----------------------------------------------------------
 
@@ -355,13 +378,13 @@ class Overlay(QWidget):
 
     def _prepare_show(self, initial_text: str) -> None:
         self._programmatic_hide = False
-        self._active_conversation = None
         if self._animating:
             self._animation.stop()
         if not self._busy:
             self.status.hide()
             self._hide_history()
         self._update_size_state()
+        self._sync_new_chat_btn()
 
         self.show()
         self.raise_()
