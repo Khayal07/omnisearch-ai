@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from utils.system_info import centered_rect, screen_for_cursor
+from core.ai_engine import AIEngine
 
 from .components import SearchBar, StreamingMarkdown
 
@@ -67,10 +68,13 @@ class Overlay(QWidget):
         self._animating = False
         self._programmatic_hide = False
         self._quit_requested = False
+        self._busy = False
+        self._engine: AIEngine | None = None
 
         self._build_ui()
         self.apply_theme("dark")
         self.setDefaultSize()
+        self.submitted.connect(self._on_submit)
 
     # -- UI construction --------------------------------------------------
 
@@ -111,6 +115,62 @@ class Overlay(QWidget):
         self.search.textChanged.connect(self._on_text_changed)
         self.search.submitted.connect(self.submitted)
 
+    def attach_engine(self, engine: AIEngine) -> None:
+        self._engine = engine
+        engine.started.connect(self._on_stream_start)
+        engine.chunk.connect(self._on_stream_chunk)
+        engine.done.connect(self._on_stream_done)
+        engine.failed.connect(self._on_stream_failed)
+        engine.cancelled.connect(self._on_stream_cancelled)
+        self.cancelled.connect(engine.cancel)
+
+    def _set_status(self, text: str, flash_ms: int = 0) -> None:
+        self.status.setText(text)
+        self.status.setStyleSheet("")
+        self.status.show()
+        if flash_ms > 0:
+            if getattr(self, "_status_timer", None) is not None:
+                self._status_timer.stop()
+            self._status_timer = QTimer(self)
+            self._status_timer.setSingleShot(True)
+            self._status_timer.timeout.connect(self.status.hide)
+            self._status_timer.start(flash_ms)
+
+    # -- streaming pipeline ------------------------------------------------
+
+    def _on_submit(self, text: str) -> None:
+        if self._busy or self._engine is None:
+            return
+        self._busy = True
+        self.output.begin_stream()
+        self._set_status("thinking…")
+        self._engine.submit(text)
+
+    def _on_stream_start(self, provider: str) -> None:
+        self.status.setText(f"streaming · {provider}")
+        self.status.show()
+
+    def _on_stream_chunk(self, delta: str) -> None:
+        self.output.add_stream(delta)
+
+    def _on_stream_done(self, full: str, provider: str = "") -> None:
+        anchor = f" · {provider}" if provider else ""
+        self._busy = False
+        self.output.finalize_stream()
+        self._set_status(f"done{anchor}", flash_ms=2500)
+
+    def _on_stream_failed(self, message: str, provider: str = "") -> None:
+        self._busy = False
+        self.output.begin_stream()
+        self.output.add_stream(f"**Error** · {message}")
+        self.output.finalize_stream()
+        self._set_status("error", flash_ms=5000)
+
+    def _on_stream_cancelled(self) -> None:
+        self._busy = False
+        self.output.finalize_stream(reset_buffer=False)
+        self._set_status("cancelled", flash_ms=1800)
+
     def setDefaultSize(self) -> None:
         self.resize(self._width, self._height)
 
@@ -150,6 +210,10 @@ class Overlay(QWidget):
         self._programmatic_hide = False
         if self._animating:
             self._animation.stop()
+        if not self._busy:
+            if self.output.current_markdown():
+                self.output.begin_stream()
+            self.status.hide()
 
         self.show()
         self.raise_()

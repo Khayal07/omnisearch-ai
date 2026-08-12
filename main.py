@@ -22,6 +22,7 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
 from config import ConfigManager
+from core.ai_engine import AIEngine
 from core.hotkey import GlobalHotkey
 from core.single_instance import SingleInstanceLock, wake_existing_instance
 from ui.overlay import Overlay
@@ -57,6 +58,9 @@ def run() -> int:
     overlay = Overlay()
     overlay.apply_theme(cfg.get("theme", "dark"))
 
+    engine = AIEngine(cfg)
+    overlay.attach_engine(engine)
+
     hotkey = GlobalHotkey()
     app.installNativeEventFilter(hotkey)
 
@@ -76,6 +80,7 @@ def run() -> int:
 
     def _shutdown() -> None:
         hotkey.cleanup()
+        engine.stop()
         lock.close()
         log.info("shutting down cleanly")
 
