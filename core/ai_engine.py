@@ -361,10 +361,17 @@ class EngineWorker(QThread):
     failed = Signal(str, str)
     cancelled = Signal()
 
-    def __init__(self, config: ConfigManager, request_text: str, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        config: ConfigManager,
+        request_text: str,
+        context: list[dict] | None = None,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
         self._config = config
         self._request = request_text
+        self._context = context
         self._loop = None
         self._future = None
 
@@ -406,10 +413,10 @@ class EngineWorker(QThread):
     async def _stream(self) -> None:
         config = self._config
         system, query = prepare_prompt(config, self._request)
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": query if query else self._request},
-        ]
+        messages: list[dict] = [{"role": "system", "content": system}]
+        if self._context:
+            messages.extend(self._context)
+        messages.append({"role": "user", "content": query if query else self._request})
         chain = provider_chain(config)
         async with _build_client() as client:
             full, provider = await run_request(
@@ -445,12 +452,16 @@ class AIEngine(QObject):
         worker = self._worker
         return worker is not None and worker.isRunning()
 
-    def submit(self, text: str) -> None:
-        """Launch a fresh worker thread for `text`. Ignores queuing while busy."""
+    def submit(self, text: str, context: list[dict] | None = None) -> None:
+        """Launch a fresh worker thread for `text`. Ignores queuing while busy.
+
+        `context` is an optional list of prior messages (``role``/``content``)
+        prepended to the request so the provider can see the conversation.
+        """
         if self.is_running:
             log.debug("ignoring submit while a request is already in flight")
             return
-        worker = EngineWorker(self._config, text)
+        worker = EngineWorker(self._config, text, context)
         worker.started.connect(self.started)
         worker.chunk.connect(self.chunk)
         worker.done.connect(self.done)

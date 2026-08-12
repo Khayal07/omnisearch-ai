@@ -391,9 +391,9 @@ class TestEngineWorker:
 
         original = EngineWorker.__init__
 
-        def tracking_init(self, config, request_text, parent=None):
+        def tracking_init(self, config, request_text, context=None, parent=None):
             spawned.append(request_text)
-            original(self, config, request_text, parent)
+            original(self, config, request_text, context, parent)
 
         mocker.patch.object(EngineWorker, "__init__", tracking_init)
 
@@ -438,3 +438,46 @@ class TestEngineWorker:
             assert len(results) == 1
         finally:
             engine.stop()
+
+    def test_prior_conversation_is_sent_as_context(self, tmp_path, qapp, qtbot, mocker):
+        from core.ai_engine import AIEngine
+
+        cfg = make_config(tmp_path)
+        cfg.set("provider", "openai")
+
+        bodies = []
+
+        def capture_factory():
+            def handler(req):
+                bodies.append(json.loads(req.content))
+                return httpx.Response(
+                    200, text=sse_body(openai_chunk("answer"))
+                )
+
+            return httpx.AsyncClient(
+                timeout=10,
+                transport=httpx.MockTransport(handler),
+            )
+
+        mocker.patch.object(ai_engine, "_build_client", side_effect=capture_factory)
+
+        engine = AIEngine(cfg)
+        results = []
+        engine.done.connect(lambda full, provider: results.append(full))
+
+        prior = [
+            {"role": "user", "content": "first question"},
+            {"role": "assistant", "content": "first answer"},
+        ]
+        try:
+            engine.submit("second question", context=prior)
+            qtbot.waitUntil(lambda: len(results) == 1, timeout=5000)
+        finally:
+            engine.stop()
+
+        messages = bodies[0]["messages"]
+        roles = [m["role"] for m in messages]
+        assert roles == ["system", "user", "assistant", "user"]
+        assert messages[1]["content"] == "first question"
+        assert messages[2]["content"] == "first answer"
+        assert messages[3]["content"] == "second question"
