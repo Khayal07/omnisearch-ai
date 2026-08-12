@@ -30,6 +30,44 @@ def overlay(qtbot):
     return win
 
 
+class TestOverlaySizing:
+    def test_expands_and_compacts(self, overlay, qtbot):
+        overlay.setDefaultSize()
+        overlay.show()
+        overlay.search.setText("hello")
+        assert overlay.height() == 560
+        overlay.search.clear()
+        assert overlay.height() == 122
+        overlay.dismiss()
+
+    def test_output_keeps_expanded(self, overlay, qtbot):
+        overlay.setDefaultSize()
+        overlay.show()
+        overlay.output.begin_stream()
+        overlay.output.add_stream("content here")
+        overlay.search.clear()
+        assert overlay.height() == 560
+        overlay.dismiss()
+
+
+class TestOverlayAnimations:
+    def test_animations_disabled_hides_instantly(self, qtbot):
+        win = Overlay(animations=False)
+        qtbot.addWidget(win)
+        win.show()
+        assert win.isVisible()
+        win._fade_out()
+        assert not win.isVisible()
+
+    def test_toggle_off_stops_animation(self, qtbot):
+        win = Overlay(animations=True)
+        qtbot.addWidget(win)
+        win.show()
+        win.set_animations(False)
+        assert not win._animations_enabled
+        win.dismiss()
+
+
 class TestOverlayHistory:
     def test_typing_populates_suggestions(self, qtbot, tmp_path):
         from ui.history import HistoryStore

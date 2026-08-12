@@ -291,6 +291,26 @@ class TestFallback:
                     client=client,
                 )
 
+    @pytest.mark.asyncio
+    async def test_chain_skips_provider_without_key(self, tmp_path):
+        cfg = make_config(tmp_path)
+        cfg.set_api_key("openai", None)
+        seen_providers = []
+
+        def gemini_responds(req):
+            return httpx.Response(200, text=sse_body(gemini_chunk("from gemini")))
+
+        async with mock_sse(gemini_responds) as client:
+            full, provider = await run_request(
+                cfg, ["openai", "gemini"], MESSAGES,
+                on_chunk=lambda s: None,
+                on_provider=seen_providers.append,
+                client=client,
+            )
+        assert provider == "gemini"
+        assert full == "from gemini"
+        assert seen_providers == ["gemini"]  # openai never attempted
+
 
 # -- Qt worker thread -----------------------------------------------------
 

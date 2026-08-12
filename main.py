@@ -76,7 +76,7 @@ def run() -> int:
     app = QApplication(sys.argv)
     _configure_qt(app)
 
-    overlay = Overlay()
+    overlay = Overlay(animations=bool(cfg.get("animations", True)))
     overlay.apply_theme(cfg.get("theme", "dark"))
 
     engine = AIEngine(cfg)
@@ -118,6 +118,7 @@ def run() -> int:
         dialog = SettingsDialog(cfg, None)
         if dialog.exec() == dialog.DialogCode.Accepted:
             overlay.apply_theme(str(cfg.get("theme", "dark")))
+            overlay.set_animations(bool(cfg.get("animations", True)))
             new_combo = str(cfg.get("hotkey", "Alt+Space"))
             if new_combo != hotkey.combo:
                 hotkey.register(new_combo)

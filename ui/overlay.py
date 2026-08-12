@@ -46,6 +46,7 @@ _STYLES_DIR = Path(__file__).resolve().parent.parent / "styles"
 _FOCUS_OUT_GRACE_MS = 150
 _FADE_IN_MS = 120
 _FADE_OUT_MS = 90
+_COMPACT_H = 122
 
 
 class Overlay(QWidget):
@@ -54,7 +55,7 @@ class Overlay(QWidget):
     submitted = Signal(str)
     cancelled = Signal()
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, animations: bool = True) -> None:
         super().__init__(parent)
         self.setWindowFlags(
             Qt.FramelessWindowHint
@@ -68,9 +69,10 @@ class Overlay(QWidget):
 
         self._width = 720
         self._height = 560
+        self._compact_h = _COMPACT_H
+        self._animations_enabled = bool(animations)
         self._animating = False
         self._programmatic_hide = False
-        self._quit_requested = False
         self._busy = False
         self._engine: AIEngine | None = None
         self._history: HistoryStore | None = None
@@ -80,6 +82,13 @@ class Overlay(QWidget):
         self.apply_theme("dark")
         self.setDefaultSize()
         self.submitted.connect(self._on_submit)
+
+    def set_animations(self, enabled: bool) -> None:
+        self._animations_enabled = bool(enabled)
+        if not self._animations_enabled and self._animating:
+            self._animation.stop()
+            self.setWindowOpacity(1.0)
+            self._animating = False
 
     # -- UI construction --------------------------------------------------
 
@@ -164,6 +173,7 @@ class Overlay(QWidget):
     def _on_stream_start(self, provider: str) -> None:
         self.status.setText(f"streaming · {provider}")
         self.status.show()
+        self._expanded()
 
     def _on_stream_chunk(self, delta: str) -> None:
         self.output.add_stream(delta)
@@ -178,6 +188,7 @@ class Overlay(QWidget):
             except Exception:
                 log.exception("failed to record history entry")
         self._set_status(f"done{anchor}", flash_ms=2500)
+        self._update_size_state()
 
     def _on_stream_failed(self, message: str, provider: str = "") -> None:
         self._busy = False
@@ -185,14 +196,44 @@ class Overlay(QWidget):
         self.output.add_stream(f"**Error** · {message}")
         self.output.finalize_stream()
         self._set_status("error", flash_ms=5000)
+        self._update_size_state()
 
     def _on_stream_cancelled(self) -> None:
         self._busy = False
         self.output.finalize_stream(reset_buffer=False)
         self._set_status("cancelled", flash_ms=1800)
+        self._update_size_state()
 
     def setDefaultSize(self) -> None:
         self.resize(self._width, self._height)
+
+    # -- compact / expanded sizing -----------------------------------------
+
+    def _needs_expansion(self) -> bool:
+        return bool(
+            self._busy
+            or self.search.text().strip()
+            or self.output.current_markdown()
+            or self.history_list.isVisible()
+        )
+
+    def _update_size_state(self) -> None:
+        if self._needs_expansion():
+            self._expanded()
+        else:
+            self._compact()
+
+    def _compact(self) -> None:
+        if self.height() != self._compact_h and not self._animating:
+            self.output.hide()
+            self.hint.hide()
+            self.resize(self._width, self._compact_h)
+
+    def _expanded(self) -> None:
+        if self.height() != self._height and not self._animating:
+            self.output.show()
+            self.hint.show()
+            self.resize(self._width, self._height)
 
     # -- interaction between search list and size --------------------------
 
@@ -202,14 +243,17 @@ class Overlay(QWidget):
     def _on_text_changed(self, text: str) -> None:
         if self._busy:
             self._hide_history()
+            self._update_size_state()
             return
         needle = text.strip()
         store = self._history
         if store is None:
             self._hide_history()
+            self._update_size_state()
             return
         results = store.search(needle, limit=12) if needle else store.recent(limit=6)
         self._populate_history(results)
+        self._update_size_state()
 
     def _populate_history(self, rows: list) -> None:
         widget = self.history_list
@@ -227,6 +271,7 @@ class Overlay(QWidget):
 
     def _hide_history(self) -> None:
         self.history_list.hide()
+        self._update_size_state()
 
     def _on_history_selected(self, item) -> None:
         if self._history is None:
@@ -271,6 +316,7 @@ class Overlay(QWidget):
                 self.output.begin_stream()
             self.status.hide()
             self._hide_history()
+        self._update_size_state()
 
         self.show()
         self.raise_()
@@ -306,10 +352,16 @@ class Overlay(QWidget):
     # -- animations --------------------------------------------------------
 
     def _fade_in(self) -> None:
+        if not self._animations_enabled:
+            self.setWindowOpacity(1.0)
+            return
         self._animate(b"windowOpacity", 0.0, 1.0, _FADE_IN_MS)
 
     def _fade_out(self) -> None:
         self._programmatic_hide = True
+        if not self._animations_enabled:
+            self.hide()
+            return
         self._animate(
             b"windowOpacity", 1.0, 0.0, _FADE_OUT_MS, on_finish=self.hide
         )

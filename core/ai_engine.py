@@ -305,6 +305,12 @@ async def run_request(
             model = pc.get("model") or config.get("model") or ""
             if not model:
                 continue
+            # Providers that require a key are skipped (not errored) when the
+            # key is missing, so a configured provider further down the chain
+            # still gets a chance to answer.
+            if name in ("openai", "gemini") and not config.api_key(name):
+                log.info("skipping provider %r: no API key configured", name)
+                continue
             try:
                 if on_provider:
                     on_provider(name)
@@ -474,4 +480,5 @@ class AIEngine(QObject):
         self._worker.cancel_current()
 
     def stop(self) -> None:
+        self._worker.cancel_current()
         self._worker.shutdown()
