@@ -90,17 +90,83 @@ class TestE2EStream:
             with qtbot.waitSignal(engine.done, timeout=5000):
                 QTest.keyClick(win.search, Qt.Key_Return)
             qtbot.waitUntil(lambda: win._busy is False, timeout=2000)
-            assert win.output.toPlainText() == "Hello world"
+            assert "Hello world" in win.output.toPlainText()
 
             win.search.setText("question two")
             with qtbot.waitSignal(engine.done, timeout=5000):
                 QTest.keyClick(win.search, Qt.Key_Return)
             qtbot.waitUntil(lambda: win._busy is False, timeout=2000)
-            assert win.output.toPlainText() == "Hello world"
+            assert "Hello world" in win.output.toPlainText()
 
             assert len(done_count) == 2
-            assert hist.search("question two")
-            assert hist.count() == 2
+            convs = hist.list_conversations()
+            assert [c["title"] for c in convs] == ["question two", "question one"]
+            assert hist.total_messages() == 4
+            win.dismiss()
+        finally:
+            engine.stop()
+            hist.close()
+
+    def test_continue_chat_sends_prior_context(self, qtbot, tmp_path, mocker):
+        body = "".join(
+            [_stream_openai_line("Hello "), _stream_openai_line("world"), "data: [DONE]\n"]
+        )
+        bodies = []
+
+        def client_factory():
+            def handler(req):
+                bodies.append(json.loads(req.content))
+                return httpx.Response(200, text=body)
+
+            return httpx.AsyncClient(
+                timeout=10,
+                transport=httpx.MockTransport(handler),
+            )
+
+        mocker.patch.object(ai_engine, "_build_client", side_effect=client_factory)
+
+        from core.ai_engine import AIEngine
+
+        hist = HistoryStore(tmp_path / "cont.db")
+        cfg = _cfg(tmp_path)
+        engine = AIEngine(cfg)
+        win = Overlay()
+        win.set_history(hist)
+        win.attach_engine(engine)
+        qtbot.addWidget(win)
+        win.show()
+
+        try:
+            win.search.setText("first question")
+            with qtbot.waitSignal(engine.done, timeout=5000):
+                QTest.keyClick(win.search, Qt.Key_Return)
+            qtbot.waitUntil(lambda: win._busy is False, timeout=2000)
+
+            convs = hist.list_conversations()
+            assert len(convs) == 1
+            chat_id = convs[0]["id"]
+
+            win._open_conversation(chat_id)
+            win.search.setText("second question")
+            with qtbot.waitSignal(engine.done, timeout=5000):
+                QTest.keyClick(win.search, Qt.Key_Return)
+            qtbot.waitUntil(lambda: win._busy is False, timeout=2000)
+
+            # Continued the SAME chat (no new conversation created).
+            assert len(hist.list_conversations()) == 1
+            msgs = hist.conversation_messages(chat_id)
+            assert [m["role"] for m in msgs] == ["user", "assistant", "user", "assistant"]
+            assert msgs[0]["content"] == "first question"
+            assert msgs[1]["content"] == "Hello world"
+
+            # The 2nd provider request carried the earlier turns as context.
+            second = bodies[1]["messages"]
+            assert [m["role"] for m in second] == ["system", "user", "assistant", "user"]
+            assert second[-1]["content"] == "second question"
+            assert second[-2]["content"] == "Hello world"
+
+            assert "Hello world" in win.output.toPlainText()
+            assert "first question" in win.output.toPlainText()
             win.dismiss()
         finally:
             engine.stop()
@@ -135,9 +201,14 @@ class TestE2EStream:
             with qtbot.waitSignal(engine.done, timeout=5000):
                 QTest.keyClick(win.search, Qt.Key_Return)
             qtbot.waitUntil(lambda: win._busy is False, timeout=2000)
-            assert win.output.toPlainText() == "Hello world"
-            hits = hist.search("summarize X")
-            assert hits and hits[0]["query"] == "summarize X"
+            assert "Hello world" in win.output.toPlainText()
+            convs = hist.list_conversations()
+            assert len(convs) == 1
+            assert convs[0]["title"] == "summarize X"
+            msgs = hist.conversation_messages(convs[0]["id"])
+            assert [m["role"] for m in msgs] == ["user", "assistant"]
+            assert msgs[0]["content"] == "summarize X"
+            assert msgs[1]["content"] == "Hello world"
             win.dismiss()
         finally:
             engine.stop()
@@ -179,7 +250,11 @@ class TestE2EStream:
 
             qtbot.waitUntil(lambda: win._busy is False, timeout=2000)
             assert not win._busy
-            assert not hist.search("count forever")
+            # The user turn was recorded, but a cancelled request stores no answer.
+            convs = hist.list_conversations()
+            assert convs and convs[0]["title"] == "count forever"
+            msgs = hist.conversation_messages(convs[0]["id"])
+            assert [m["role"] for m in msgs] == ["user"]
         finally:
             engine.stop()
             hist.close()
