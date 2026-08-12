@@ -22,12 +22,14 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QCursor
+from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QPushButton,
@@ -48,6 +50,14 @@ _FOCUS_OUT_GRACE_MS = 150
 _FADE_IN_MS = 120
 _FADE_OUT_MS = 90
 _COMPACT_H = 122
+
+
+def theme_stylesheet(theme: str) -> str:
+    """Read the QSS for ``theme``, falling back to the dark theme if missing."""
+    path = _STYLES_DIR / f"{theme}_theme.qss"
+    if not path.is_file():
+        path = _STYLES_DIR / "dark_theme.qss"
+    return path.read_text(encoding="utf-8")
 
 
 def format_conversation(messages: list[dict]) -> str:
@@ -113,34 +123,55 @@ class Overlay(QWidget):
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 16, 16, 16)
+        outer.setContentsMargins(28, 14, 28, 28)
         outer.setSpacing(0)
 
         self.card = QFrame(self)
         self.card.setObjectName("card")
+        self._apply_card_shadow()
 
         layout = QVBoxLayout(self.card)
-        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setContentsMargins(16, 12, 16, 12)
         layout.setSpacing(10)
 
-        self.search = SearchBar(self.card)
-        self.search.setFocusPolicy(Qt.StrongFocus)
-        top_row = QHBoxLayout()
-        top_row.addWidget(self.search, stretch=1)
+        # Header bar: brand on the left, actions on the right. Hidden in compact
+        # mode so the idle state stays a single slim search bar.
+        self.header = QWidget(self.card)
+        self.header.setObjectName("headerBar")
+        header = QHBoxLayout(self.header)
+        header.setContentsMargins(2, 0, 2, 0)
+        header.setSpacing(10)
 
-        self.new_chat_btn = QPushButton("New chat", self.card)
+        brand_row = QHBoxLayout()
+        brand_row.setSpacing(8)
+        self.brand_dot = QLabel(self.header)
+        self.brand_dot.setObjectName("brandDot")
+        self.brand_dot.setFixedSize(10, 10)
+        self.brand = QLabel("OmniSearch AI", self.header)
+        self.brand.setObjectName("brandLabel")
+        brand_row.addWidget(self.brand_dot)
+        brand_row.addWidget(self.brand)
+        header.addLayout(brand_row)
+        header.addStretch(1)
+
+        self.new_chat_btn = QPushButton("New chat", self.header)
         self.new_chat_btn.setObjectName("newChatButton")
         self.new_chat_btn.setToolTip("Start a fresh conversation")
         self.new_chat_btn.setCursor(Qt.PointingHandCursor)
         self.new_chat_btn.clicked.connect(self.start_new_chat)
-        top_row.addWidget(self.new_chat_btn)
-        self.new_chat_btn.hide()
 
-        self.status = QLabel("", self.card)
+        self.status = QLabel("", self.header)
         self.status.setObjectName("statusLabel")
         self.status.hide()
-        top_row.addWidget(self.status)
-        layout.addLayout(top_row)
+
+        header.addWidget(self.new_chat_btn)
+        header.addWidget(self.status)
+        layout.addWidget(self.header)
+
+        self.search = SearchBar(self.card)
+        self.search.setFocusPolicy(Qt.StrongFocus)
+        self._add_search_icon()
+        layout.addWidget(self.search)
 
         self.history_list = QListWidget(self.card)
         self.history_list.setObjectName("historyList")
@@ -163,6 +194,29 @@ class Overlay(QWidget):
         self.search.setFocusProxy(None)
         self.search.textChanged.connect(self._on_text_changed)
         self.search.submitted.connect(self.submitted)
+
+    def _add_search_icon(self) -> None:
+        """Leading magnifier glyph drawn programmatically (no asset files)."""
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pen = QPen(QColor("#8f9bb3"), 1.7, Qt.SolidLine, Qt.RoundCap)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(3, 3, 8, 8)
+        painter.drawLine(9, 9, 14, 14)
+        painter.end()
+        self.search.addAction(QIcon(pixmap), QLineEdit.ActionPosition.LeadingPosition)
+
+    def _apply_card_shadow(self) -> None:
+        """Soft drop-shadow so the floating card lifts off the desktop."""
+        shadow = QGraphicsDropShadowEffect(self.card)
+        shadow.setBlurRadius(40)
+        shadow.setXOffset(0)
+        shadow.setYOffset(8)
+        shadow.setColor(QColor(0, 0, 0, 140))
+        self.card.setGraphicsEffect(shadow)
 
     def attach_engine(self, engine: AIEngine) -> None:
         self._engine = engine
@@ -283,12 +337,14 @@ class Overlay(QWidget):
 
     def _compact(self) -> None:
         if self.height() != self._compact_h and not self._animating:
+            self.header.hide()
             self.output.hide()
             self.hint.hide()
             self.resize(self._width, self._compact_h)
 
     def _expanded(self) -> None:
         if self.height() != self._height and not self._animating:
+            self.header.show()
             self.output.show()
             self.hint.show()
             self.resize(self._width, self._height)
@@ -354,11 +410,8 @@ class Overlay(QWidget):
     # -- theming -----------------------------------------------------------
 
     def apply_theme(self, theme: str) -> None:
-        stylesheet_path = _STYLES_DIR / f"{theme}_theme.qss"
-        if not stylesheet_path.is_file():
-            stylesheet_path = _STYLES_DIR / "dark_theme.qss"
         try:
-            self.setStyleSheet(stylesheet_path.read_text(encoding="utf-8"))
+            self.setStyleSheet(theme_stylesheet(theme))
         except OSError as exc:
             log.warning("failed to load theme %r: %s", theme, exc)
 
