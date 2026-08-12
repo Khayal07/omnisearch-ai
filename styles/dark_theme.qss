@@ -1,0 +1,150 @@
+/* OmniSearch AI — dark glassmorphism theme */
+
+QWidget#overlayRoot {
+    background: transparent;
+}
+
+QFrame#card {
+    background-color: rgba(28, 29, 34, 242);
+    border: 1px solid rgba(255, 255, 255, 18);
+    border-radius: 14px;
+}
+
+QLineEdit#searchBar {
+    background-color: rgba(255, 255, 255, 10);
+    color: #f0f0f4;
+    border: 1px solid rgba(255, 255, 255, 16);
+    border-radius: 9px;
+    padding: 9px 12px;
+    font-size: 15px;
+    selection-background-color: #3a57d6;
+}
+
+QLineEdit#searchBar:focus {
+    border: 1px solid #6c8cff;
+    background-color: rgba(92, 120, 255, 18);
+}
+
+QLineEdit#searchBar::placeholder {
+    color: rgba(240, 240, 244, 108);
+}
+
+QLabel#statusLabel {
+    color: #8f9bb3;
+    font-size: 12px;
+    padding-right: 6px;
+}
+
+QTextBrowser#streamOutput {
+    background: rgba(0, 0, 0, 45);
+    border: 1px solid rgba(255, 255, 255, 10);
+    border-radius: 9px;
+    color: #e6e7ec;
+    font-size: 13px;
+    selection-background-color: #3a57d6;
+}
+
+QTextBrowser#streamOutput QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 3px;
+}
+
+QTextBrowser#streamOutput QScrollBar::handle:vertical {
+    background: rgba(255, 255, 255, 30);
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QTextBrowser#streamOutput QScrollBar::handle:vertical:hover {
+    background: rgba(255, 255, 255, 60);
+}
+
+QTextBrowser#streamOutput QScrollBar::add-line:vertical,
+QTextBrowser#streamOutput QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QLabel#footerHint {
+    color: rgba(240, 240, 244, 110);
+    font-size: 11px;
+}
+
+QListView#historyList {
+    background: transparent;
+    color: #e6e7ec;
+    border: none;
+    font-size: 13px;
+}
+
+QListView#historyList::item {
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+QListView#historyList::item:selected {
+    background: rgba(108, 140, 255, 60);
+    color: #ffffff;
+}
+
+QDialog#settingsDialog {
+    background-color: #1c1d22;
+}
+
+QDialog#settingsDialog QLabel {
+    color: #e6e7ec;
+}
+
+QDialog#settingsDialog QLineEdit,
+QDialog#settingsDialog QComboBox,
+QDialog#settingsDialog QSpinBox {
+    background-color: rgba(255, 255, 255, 10);
+    color: #f0f0f4;
+    border: 1px solid rgba(255, 255, 255, 16);
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+
+QDialog#settingsDialog QPushButton {
+    background-color: #2c2f3a;
+    color: #f0f0f4;
+    border: 1px solid rgba(255, 255, 255, 18);
+    border-radius: 7px;
+    padding: 7px 16px;
+}
+
+QDialog#settingsDialog QPushButton:hover {
+    background-color: #38415a;
+}
+
+QDialog#settingsDialog QPushButton#primaryButton {
+    background-color: #4a6cf7;
+    border: none;
+}
+
+QDialog#settingsDialog QCheckBox {
+    color: #e6e7ec;
+}
+
+QMenu {
+    background-color: #202127;
+    color: #e6e7ec;
+    border: 1px solid rgba(255, 255, 255, 18);
+    border-radius: 8px;
+    padding: 6px;
+}
+
+QMenu::item {
+    padding: 6px 18px 6px 14px;
+    border-radius: 5px;
+}
+
+QMenu::item:selected {
+    background: rgba(108, 140, 255, 70);
+}
+
+QMenu::separator {
+    height: 1px;
+    background: rgba(255, 255, 255, 16);
+    margin: 4px 8px;
+}
