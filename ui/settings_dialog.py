@@ -136,17 +136,40 @@ class SettingsDialog(QDialog):
 
     # -- construction ------------------------------------------------------
 
+    def _section_label(self, text: str) -> QLabel:
+        label = QLabel(text, self)
+        label.setObjectName("sectionLabel")
+        return label
+
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        header = QWidget(self)
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(22, 16, 22, 12)
+        header_layout.setSpacing(2)
+        self.dialog_title = QLabel("OmniSearch AI", header)
+        self.dialog_title.setObjectName("dialogTitle")
+        self.dialog_subtitle = QLabel(
+            "Configure providers, hotkeys and behavior", header
+        )
+        self.dialog_subtitle.setObjectName("dialogSubtitle")
+        header_layout.addWidget(self.dialog_title)
+        header_layout.addWidget(self.dialog_subtitle)
+        outer.addWidget(header)
+
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
 
         body = QWidget(scroll)
         form = QFormLayout(body)
-        form.setContentsMargins(16, 16, 16, 16)
+        form.setContentsMargins(22, 8, 22, 18)
         form.setSpacing(12)
 
+        form.addRow(self._section_label("Connection"))
         self.provider = QComboBox(body)
         for name in ("openai", "gemini", "ollama", "custom"):
             self.provider.addItem(name)
@@ -161,6 +184,7 @@ class SettingsDialog(QDialog):
         self.model.setPlaceholderText("model identifier")
         form.addRow("Model", self.model)
 
+        form.addRow(self._section_label("API Keys"))
         key_group = QWidget(body)
         key_layout = QVBoxLayout(key_group)
         key_layout.setContentsMargins(0, 0, 0, 0)
@@ -177,6 +201,7 @@ class SettingsDialog(QDialog):
             self.key_edits[provider] = edit
         form.addRow("API Keys", key_group)
 
+        form.addRow(self._section_label("Behavior"))
         self.hotkey = HotkeyCapture(body)
         form.addRow("Global Hotkey", self.hotkey)
 
@@ -197,6 +222,7 @@ class SettingsDialog(QDialog):
         self.auto_start = QCheckBox(body)
         form.addRow("Launch at login", self.auto_start)
 
+        form.addRow(self._section_label("Advanced"))
         self.fallback = QLineEdit(body)
         self.fallback.setPlaceholderText("e.g. ollama, openai, gemini")
         form.addRow("Fallback order", self.fallback)
@@ -214,17 +240,20 @@ class SettingsDialog(QDialog):
 
         self.system_prompt = QPlainTextEdit(body)
         self.system_prompt.setPlaceholderText("Default system prompt for the AI")
+        self.system_prompt.setFixedHeight(96)
         form.addRow("System prompt", self.system_prompt)
 
         scroll.setWidget(body)
         outer.addWidget(scroll, stretch=1)
 
         buttons = QHBoxLayout()
+        buttons.setContentsMargins(22, 10, 22, 16)
         buttons.addStretch(1)
         cancel = QPushButton("Cancel", self)
         cancel.clicked.connect(self.reject)
         save = QPushButton("Save", self)
         save.setObjectName("primaryButton")
+        save.setDefault(True)
         save.clicked.connect(self.accept)
         buttons.addWidget(cancel)
         buttons.addWidget(save)
