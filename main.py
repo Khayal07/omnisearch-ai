@@ -27,7 +27,7 @@ from core.ai_engine import AIEngine
 from core.hotkey import GlobalHotkey
 from core.single_instance import SingleInstanceLock, wake_existing_instance
 from ui.history import HistoryStore
-from ui.overlay import Overlay
+from ui.overlay import Overlay, theme_stylesheet
 from ui.settings_dialog import SettingsDialog
 from utils.logger import get_logger, setup_logging
 
@@ -63,6 +63,14 @@ def _configure_qt(app: QApplication) -> None:
     app.setQuitOnLastWindowClosed(False)
 
 
+def _apply_theme(app: QApplication, theme: str) -> None:
+    """Theme the whole app (overlay + settings dialog + menus)."""
+    try:
+        app.setStyleSheet(theme_stylesheet(theme))
+    except OSError as exc:
+        log.warning("failed to apply theme %r: %s", theme, exc)
+
+
 def run() -> int:
     setup_logging()
     log.info("starting OmniSearch AI")
@@ -78,6 +86,8 @@ def run() -> int:
     )
     app = QApplication(sys.argv)
     _configure_qt(app)
+
+    _apply_theme(app, cfg.get("theme", "dark"))
 
     overlay = Overlay(animations=bool(cfg.get("animations", True)))
     overlay.apply_theme(cfg.get("theme", "dark"))
@@ -120,6 +130,7 @@ def run() -> int:
     def _open_settings() -> None:
         dialog = SettingsDialog(cfg, None)
         if dialog.exec() == dialog.DialogCode.Accepted:
+            _apply_theme(app, str(cfg.get("theme", "dark")))
             overlay.apply_theme(str(cfg.get("theme", "dark")))
             overlay.set_animations(bool(cfg.get("animations", True)))
             new_combo = str(cfg.get("hotkey", "Alt+Space"))
