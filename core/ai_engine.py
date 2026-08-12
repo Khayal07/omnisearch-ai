@@ -15,12 +15,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Awaitable, Callable, Iterable
 
 import httpx
 from PySide6.QtCore import QObject, QThread, Signal
 
 from config import ConfigManager
+from core.tool_caller import ToolCaller
 
 log = logging.getLogger(__name__)
 
@@ -79,6 +81,146 @@ def provider_chain(config: ConfigManager) -> list[str]:
         if name not in chain:
             chain.append(name)
     return chain
+
+
+# ---------------------------------------------------------------------------
+# Local tool definitions (Function Calling)
+# ---------------------------------------------------------------------------
+
+LOCAL_TOOLS: list[dict] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "search_files",
+            "description": (
+                "Search local files on this Windows PC by file name. Returns the "
+                "filename, full path, file type and last-modified time."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "File-name substring to match"},
+                    "extension": {"type": "string", "description": "Optional extension filter, e.g. 'pdf'"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "launch_app",
+            "description": "Launch an installed application by name (from the Windows Start Menu).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "app_name": {"type": "string", "description": "Application name, e.g. 'Visual Studio Code'"},
+                },
+                "required": ["app_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file_content",
+            "description": (
+                "Read the text content of a local file (.txt, .md, .py, .json, .csv, "
+                ".log, .pdf, .docx, ...). Returns a truncated excerpt."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string", "description": "Full path to the local file"},
+                },
+                "required": ["file_path"],
+            },
+        },
+    },
+]
+
+_INTENT_VERBS = {
+    "launch": r"^(?:please\s+)?(?:launch|start|run|open)\s+(?:the\s+)?(?:app\s+|application\s+|program\s+)?(.+?)\s*$",
+    "search": r"\b(?:find|search|locate|looking\s+for|get\s+me|where\s+(?:is|are))\b",
+    "read": r"\b(?:read|open|show|view|summarize|summarise)\s+(?:the\s+)?(?:contents?\s+of\s+|file\s+)?([^\s,;]+(?:\.[a-z0-9]{1,8}))\b",
+}
+_EXTENSIONS = {
+    "pdf", "docx", "doc", "txt", "md", "markdown", "py", "json", "csv",
+    "log", "xlsx", "xls", "png", "jpg", "jpeg", "zip", "html", "xml",
+    "sql", "yml", "yaml", "ppt", "pptx",
+}
+_EXT_PATTERN = re.compile(r"\.(pdf|docx|doc|txt|md|py|json|csv|log|xlsx|xls|png|jpg|jpeg|zip|html|xml|sql|yml|yaml|ppt|pptx)\b", re.I)
+_EXT_WORD = re.compile(r"\b(?:pdf|docx|doc|txt|md|py|json|csv|log|xlsx|xls|png|jpg|jpeg|zip|html)\b", re.I)
+_SEARCH_STOP = re.compile(
+    r"\b(?:find|search|locate|looking|for|my|a|an|the|me|files|file|documents|"
+    r"document|folder|folders|of|on|in|into|and|with|please|all|any|that|need|"
+    r"to|downloaded|drive|disk|computer|system|summarize|summarise|about|show|"
+    r"it|them|its|their)\b",
+    re.I,
+)
+_TOOL_SIGNALS = re.compile(
+    r"\b(?:find|search|locate|launch|start|run|open|read|show|view|"
+    r"file|files|document|documents|folder|folders|app|application|"
+    r"program|install|resume|budget|report|archive)\b",
+    re.I,
+)
+
+
+def _extract_extension(text: str) -> str | None:
+    match = _EXT_PATTERN.search(text)
+    if match:
+        return match.group(1).lower()
+    word = _EXT_WORD.search(text)
+    if word:
+        return word.group(0).lower() if word.group(0).lower() in _EXTENSIONS else None
+    return None
+
+
+def detect_tool_intent(text: str) -> list[dict]:
+    """Deterministic, offline decoder of clear local-tool requests.
+
+    Returns a list of ``{"name": tool, "arguments": {...}}`` actions. The model
+    keeps the final say for ambiguous queries via the OpenAI tool round; this
+    decoder only fires on unmistakable patterns so ordinary chat stays intact.
+    """
+    low = (text or "").strip()
+    if not low:
+        return []
+
+    read = re.search(_INTENT_VERBS["read"], low, re.I)
+    if read and (":" in read.group(1) or read.group(1).count(".")):
+        return [{"name": "read_file_content", "arguments": {"file_path": read.group(1)}}]
+
+    launch = re.match(_INTENT_VERBS["launch"], low, re.I)
+    if launch:
+        app = launch.group(1).strip().strip(".")
+        app = re.sub(r"\s+(?:now|please)$", "", app, flags=re.I).strip()
+        if app:
+            return [{"name": "launch_app", "arguments": {"app_name": app}}]
+
+    if re.search(_INTENT_VERBS["search"], low, re.I):
+        extension = _extract_extension(low)
+        has_file_word = re.search(r"\b(?:file|files|document|documents|folder|folders)\b", low, re.I)
+        if extension is not None or has_file_word:
+            cleaned = re.sub(r"\.(?:pdf|docx|doc|txt|md|py|json|csv|log)\b", " ", low, flags=re.I)
+            cleaned = _SEARCH_STOP.sub(" ", cleaned)
+            words = [
+                w
+                for w in re.findall(r"[a-zA-Z0-9][a-zA-Z0-9_\-.]*", cleaned)
+                if len(w) > 1 and w.lower() not in _EXTENSIONS
+            ]
+            query = " ".join(words[:5]).strip()
+            arguments: dict = {"query": query or low.strip()}
+            if extension is not None:
+                arguments["extension"] = extension
+            return [{"name": "search_files", "arguments": arguments}]
+
+    return []
+
+
+def _has_tool_signal(text: str) -> bool:
+    """Broad gate: does the query even look like it could touch a local tool?"""
+    return bool(text and _TOOL_SIGNALS.search(text))
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +485,49 @@ async def run_request(
     ) from last_exc
 
 
+async def request_openai_tool_calls(
+    config: ConfigManager,
+    provider: str,
+    messages: list[dict],
+    *,
+    client: httpx.AsyncClient,
+    model: str,
+) -> tuple[str, list[dict]]:
+    """Non-streaming OpenAI round that asks the model to choose a local tool.
+
+    Returns ``(assistant_content, tool_calls)``. Content alone (no tool calls)
+    means the model answered directly. Any HTTP/JSON failure raises
+    ``ProviderError`` so the caller can fall back to normal streaming.
+    """
+    key = config.api_key(provider)
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    url = _openai_url(config, provider)
+    payload = _openai_body(config, provider, model, messages)
+    payload["stream"] = False
+    payload["tools"] = LOCAL_TOOLS
+    payload["tool_choice"] = "auto"
+    try:
+        response = await client.post(url, json=payload, headers=headers)
+    except httpx.HTTPError as exc:
+        raise ProviderOfflineError(provider, f"Connection failed: {exc}") from exc
+    if response.status_code >= 400:
+        raise ProviderError(
+            provider,
+            f"API error {response.status_code}: {response.text[:200]}",
+            status_code=response.status_code,
+        )
+    try:
+        data = response.json()
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise ProviderError(provider, "Empty or malformed tool-decision response") from exc
+    choice = (data.get("choices") or [{}])[0]
+    message = choice.get("message") or {}
+    tool_calls = message.get("tool_calls") or []
+    return (message.get("content") or ""), list(tool_calls)
+
+
 # ---------------------------------------------------------------------------
 # Qt worker thread
 # ---------------------------------------------------------------------------
@@ -372,6 +557,7 @@ class EngineWorker(QThread):
         self._config = config
         self._request = request_text
         self._context = context
+        self.tool_caller: ToolCaller | None = None
         self._loop = None
         self._future = None
 
@@ -416,7 +602,32 @@ class EngineWorker(QThread):
         messages: list[dict] = [{"role": "system", "content": system}]
         if self._context:
             messages.extend(self._context)
-        messages.append({"role": "user", "content": query if query else self._request})
+        final_user = query if query else self._request
+        messages.append({"role": "user", "content": final_user})
+
+        tool_caller = self.tool_caller
+        if config.get("tool_calling", True) and tool_caller is not None:
+            actions = detect_tool_intent(final_user)
+            if actions:
+                # Deterministic local pre-pass: run tools, let the model
+                # render an answer grounded in the tool results.
+                summaries = [
+                    f"{action['name']}: {tool_caller.execute(action['name'], action.get('arguments') or {})}"
+                    for action in actions
+                ]
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": "[Local tool results]\n" + "\n".join(summaries),
+                    }
+                )
+            elif _has_tool_signal(final_user):
+                # Ambiguous tool-ish query: let an OpenAI-compatible model
+                # decide via Function Calling before we stream the answer.
+                full = await self._maybe_model_tool_round(messages)
+                if full is not None:
+                    return
+
         chain = provider_chain(config)
         async with _build_client() as client:
             full, provider = await run_request(
@@ -426,6 +637,60 @@ class EngineWorker(QThread):
                 client=client,
             )
         self.done.emit(full, provider)
+
+    async def _maybe_model_tool_round(self, messages: list[dict]) -> str | None:
+        """Ask an OpenAI-compatible provider for a tool decision.
+
+        Executes any requested tool and streams the final, tool-grounded
+        answer. Returns ``None`` to signal "fall back to the normal chain".
+        """
+        config = self._config
+        tool_caller = self.tool_caller
+        if tool_caller is None:
+            return None
+        for name in provider_chain(config):
+            if name in ("gemini", "ollama"):
+                continue
+            pc = config.provider_config(name)
+            model = pc.get("model") or config.get("model") or ""
+            if not model:
+                continue
+            if name == "openai" and not config.api_key(name):
+                continue
+            if name not in ("openai", "custom") and not config.api_key(name):
+                continue
+            try:
+                async with _build_client() as client:
+                    content, tool_calls = await request_openai_tool_calls(
+                        config, name, messages, client=client, model=model
+                    )
+            except (ProviderError, httpx.HTTPError, ValueError):
+                log.debug("tool-decision round failed on %r; falling back", name)
+                continue
+            if not tool_calls:
+                if not content:
+                    return None
+                self.chunk.emit(content)
+                self.done.emit(content, name)
+                return "done"
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": content or None,
+                    "tool_calls": tool_calls,
+                }
+            )
+            messages.extend(tool_caller.dispatch(tool_calls))
+            async with _build_client() as client:
+                full, provider = await run_request(
+                    config, [name], messages,
+                    on_chunk=self.chunk.emit,
+                    on_provider=self.started.emit,
+                    client=client,
+                )
+            self.done.emit(full, provider)
+            return "done"
+        return None
 
 
 class AIEngine(QObject):
@@ -446,6 +711,7 @@ class AIEngine(QObject):
         super().__init__(parent)
         self._config = config
         self._worker: EngineWorker | None = None
+        self._tool_caller = ToolCaller(config.apps_db_path, config.files_db_path)
 
     @property
     def is_running(self) -> bool:
@@ -462,6 +728,7 @@ class AIEngine(QObject):
             log.debug("ignoring submit while a request is already in flight")
             return
         worker = EngineWorker(self._config, text, context)
+        worker.tool_caller = self._tool_caller
         worker.started.connect(self.started)
         worker.chunk.connect(self.chunk)
         worker.done.connect(self.done)
