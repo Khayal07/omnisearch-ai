@@ -192,6 +192,7 @@ class Overlay(QWidget):
             return
         self._busy = True
         self._last_submitted = text
+        self.search.clear()
         self._hide_history()
 
         store = self._history
