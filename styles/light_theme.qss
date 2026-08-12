@@ -1,0 +1,290 @@
+/* OmniSearch AI — light theme */
+
+QWidget#overlayRoot {
+    background: transparent;
+}
+
+QFrame#card {
+    background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 rgba(255, 255, 255, 254),
+        stop: 0.55 rgba(250, 251, 255, 254),
+        stop: 1 rgba(240, 242, 250, 254)
+    );
+    border: 1px solid rgba(20, 25, 40, 26);
+    border-radius: 16px;
+}
+
+QWidget#headerBar {
+    background: transparent;
+}
+
+QLabel#brandDot {
+    background-color: #4a6cf7;
+    border-radius: 5px;
+}
+
+QLabel#brandLabel {
+    color: #1d2130;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+}
+
+QLineEdit#searchBar {
+    background-color: rgba(20, 30, 60, 8);
+    color: #1d2130;
+    border: 1px solid rgba(20, 30, 60, 18);
+    border-radius: 11px;
+    padding: 10px 12px;
+    font-size: 15px;
+    selection-background-color: #4a6cf7;
+    selection-color: #ffffff;
+}
+
+QLineEdit#searchBar:focus {
+    border: 1px solid #4a6cf7;
+    background-color: rgba(74, 108, 247, 10);
+}
+
+QLineEdit#searchBar:hover:not(:focus) {
+    border: 1px solid rgba(20, 30, 60, 34);
+}
+
+QLineEdit#searchBar::placeholder {
+    color: rgba(29, 33, 48, 90);
+}
+
+QPushButton#newChatButton {
+    background: rgba(74, 108, 247, 12);
+    color: #3a55d6;
+    border: 1px solid rgba(74, 108, 247, 70);
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QPushButton#newChatButton:hover {
+    background: rgba(74, 108, 247, 22);
+    color: #2c47c8;
+    border: 1px solid #4a6cf7;
+}
+
+QPushButton#newChatButton:pressed {
+    background: rgba(74, 108, 247, 34);
+}
+
+QLabel#statusLabel {
+    color: #6a7284;
+    font-size: 12px;
+    padding-right: 4px;
+}
+
+QTextBrowser#streamOutput {
+    background: rgba(20, 30, 60, 6);
+    border: 1px solid rgba(20, 30, 60, 14);
+    border-radius: 10px;
+    color: #2a2f3d;
+    font-size: 13px;
+    selection-background-color: #4a6cf7;
+    selection-color: #ffffff;
+    padding: 2px;
+}
+
+QTextBrowser#streamOutput QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 4px;
+}
+
+QTextBrowser#streamOutput QScrollBar::handle:vertical {
+    background: rgba(20, 30, 60, 40);
+    border-radius: 4px;
+    min-height: 24px;
+}
+
+QTextBrowser#streamOutput QScrollBar::handle:vertical:hover {
+    background: rgba(20, 30, 60, 70);
+}
+
+QTextBrowser#streamOutput QScrollBar::add-line:vertical,
+QTextBrowser#streamOutput QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QLabel#footerHint {
+    color: rgba(29, 33, 48, 110);
+    font-size: 11px;
+}
+
+QListView#historyList {
+    background: rgba(20, 30, 60, 6);
+    color: #2a2f3d;
+    border: 1px solid rgba(20, 30, 60, 14);
+    border-radius: 9px;
+    font-size: 13px;
+    padding: 3px;
+}
+
+QListView#historyList::item {
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+QListView#historyList::item:hover {
+    background: rgba(20, 30, 60, 8);
+}
+
+QListView#historyList::item:selected {
+    background: rgba(74, 108, 247, 40);
+    color: #1a2f9e;
+}
+
+/* ---- Settings dialog -------------------------------------------- */
+
+QDialog#settingsDialog {
+    background-color: #f4f5fa;
+}
+
+QLabel#dialogTitle {
+    color: #1d2130;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+QLabel#dialogSubtitle {
+    color: #6a7284;
+    font-size: 12px;
+}
+
+QLabel#sectionLabel {
+    color: #4a6cf7;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    padding-top: 8px;
+}
+
+QDialog#settingsDialog QLabel {
+    color: #3a4152;
+}
+
+QDialog#settingsDialog QLineEdit,
+QDialog#settingsDialog QComboBox,
+QDialog#settingsDialog QSpinBox,
+QDialog#settingsDialog QDoubleSpinBox,
+QDialog#settingsDialog QPlainTextEdit {
+    background-color: #ffffff;
+    color: #1d2130;
+    border: 1px solid rgba(20, 30, 60, 22);
+    border-radius: 8px;
+    padding: 7px 9px;
+    selection-background-color: #4a6cf7;
+    selection-color: #ffffff;
+}
+
+QDialog#settingsDialog QLineEdit:focus,
+QDialog#settingsDialog QComboBox:focus,
+QDialog#settingsDialog QSpinBox:focus,
+QDialog#settingsDialog QDoubleSpinBox:focus,
+QDialog#settingsDialog QPlainTextEdit:focus {
+    border: 1px solid #4a6cf7;
+}
+
+QDialog#settingsDialog QComboBox::drop-down {
+    border: none;
+    width: 22px;
+}
+
+QDialog#settingsDialog QComboBox QAbstractItemView {
+    background-color: #ffffff;
+    color: #1d2130;
+    border: 1px solid rgba(20, 30, 60, 22);
+    border-radius: 8px;
+    selection-background-color: rgba(74, 108, 247, 40);
+}
+
+QDialog#settingsDialog QPushButton {
+    background-color: #ffffff;
+    color: #3a4152;
+    border: 1px solid rgba(20, 30, 60, 26);
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-weight: 600;
+}
+
+QDialog#settingsDialog QPushButton:hover {
+    background-color: #eef0f7;
+    border: 1px solid rgba(20, 30, 60, 44);
+}
+
+QDialog#settingsDialog QPushButton#primaryButton {
+    background-color: #4a6cf7;
+    border: none;
+    color: #ffffff;
+}
+
+QDialog#settingsDialog QPushButton#primaryButton:hover {
+    background-color: #5a7bfa;
+}
+
+QDialog#settingsDialog QCheckBox {
+    color: #3a4152;
+}
+
+QDialog#settingsDialog QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid rgba(20, 30, 60, 36);
+    border-radius: 4px;
+    background-color: #ffffff;
+}
+
+QDialog#settingsDialog QCheckBox::indicator:checked {
+    background-color: #4a6cf7;
+    border: 1px solid #4a6cf7;
+}
+
+QDialog#settingsDialog QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+/* ---- Menus / tray ----------------------------------------------- */
+
+QMenu {
+    background-color: #ffffff;
+    color: #1d2130;
+    border: 1px solid rgba(20, 30, 60, 24);
+    border-radius: 9px;
+    padding: 6px;
+}
+
+QMenu::item {
+    padding: 7px 20px 7px 14px;
+    border-radius: 6px;
+}
+
+QMenu::item:selected {
+    background: rgba(74, 108, 247, 40);
+    color: #1a2f9e;
+}
+
+QMenu::item:disabled {
+    color: rgba(29, 33, 48, 70);
+}
+
+QMenu::separator {
+    height: 1px;
+    background: rgba(20, 30, 60, 20);
+    margin: 5px 8px;
+}
+
+QToolTip {
+    background-color: #ffffff;
+    color: #1d2130;
+    border: 1px solid rgba(20, 30, 60, 24);
+    border-radius: 6px;
+    padding: 5px 8px;
+}
