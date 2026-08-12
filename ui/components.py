@@ -64,6 +64,12 @@ class StreamingMarkdown(QTextBrowser):
         self._buffer = ""
         self.clear()
 
+    def replace_content(self, markdown: str) -> None:
+        """Render previously-created content (e.g. a loaded conversation)
+        without starting a new stream."""
+        self._buffer = markdown
+        self.setMarkdown(markdown)
+
     def add_stream(self, text: str) -> None:
         self._buffer += text
         self.setMarkdown(self._buffer)

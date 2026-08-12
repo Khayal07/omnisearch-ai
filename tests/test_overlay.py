@@ -73,9 +73,9 @@ class TestOverlayHistory:
         from ui.history import HistoryStore
 
         store = HistoryStore(tmp_path / "h.db")
-        store.add("draw a dog", "ok", "openai")
-        store.add("draw a cat", "ok", "openai")
-        store.add("sing a song", "ok", "openai")
+        store.create_conversation("draw a dog")
+        store.create_conversation("draw a cat")
+        store.create_conversation("sing a song")
 
         win = Overlay()
         qtbot.addWidget(win)
@@ -87,6 +87,7 @@ class TestOverlayHistory:
         assert win.history_list.count() == 2
         texts = [win.history_list.item(i).text() for i in range(win.history_list.count())]
         assert "draw a dog" in texts
+        assert "draw a cat" in texts
         win.dismiss()
         store.close()
 
@@ -107,7 +108,7 @@ class TestOverlayHistory:
         from ui.history import HistoryStore
 
         store = HistoryStore(tmp_path / "h.db")
-        store.add("recent query", "ok", "openai")
+        store.create_conversation("recent query")
         win = Overlay()
         qtbot.addWidget(win)
         win.set_history(store)
@@ -116,6 +117,28 @@ class TestOverlayHistory:
         win._on_text_changed("")
         assert win.history_list.isVisible()
         assert win.history_list.item(0).text() == "recent query"
+        win.dismiss()
+        store.close()
+
+    def test_selecting_conversation_renders_chat(self, qtbot, tmp_path):
+        from ui.history import HistoryStore
+
+        store = HistoryStore(tmp_path / "h.db")
+        cid = store.create_conversation("hello world")
+        store.append_message(cid, "user", "hello world")
+        store.append_message(cid, "assistant", "hi there")
+
+        win = Overlay()
+        qtbot.addWidget(win)
+        win.set_history(store)
+        win.show()
+        win.search.setText("hello")
+        assert win.history_list.count() == 1
+        win.history_list.setCurrentRow(0)
+        win._on_history_selected(win.history_list.currentItem())
+        assert win._active_conversation == cid
+        assert "hello world" in win.output.toPlainText()
+        assert "hi there" in win.output.toPlainText()
         win.dismiss()
         store.close()
 

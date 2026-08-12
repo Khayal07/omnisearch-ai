@@ -49,6 +49,23 @@ _FADE_OUT_MS = 90
 _COMPACT_H = 122
 
 
+def format_conversation(messages: list[dict]) -> str:
+    """Render conversation turns as a Markdown transcript."""
+    blocks = []
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content") or ""
+        if role == "user":
+            blocks.append(f"**Siz**\n\n{content}")
+        elif role == "assistant":
+            provider = msg.get("provider") or ""
+            label = "**OmniSearch**" + (f" · {provider}" if provider else "")
+            blocks.append(f"{label}\n\n{content}")
+        else:
+            blocks.append(content)
+    return "\n\n---\n\n".join(blocks)
+
+
 class Overlay(QWidget):
     """Frameless search overlay. Emits submitted / cancelled for the engine."""
 
@@ -77,6 +94,7 @@ class Overlay(QWidget):
         self._engine: AIEngine | None = None
         self._history: HistoryStore | None = None
         self._last_submitted = ""
+        self._active_conversation: int | None = None
 
         self._build_ui()
         self.apply_theme("dark")
@@ -166,9 +184,23 @@ class Overlay(QWidget):
         self._busy = True
         self._last_submitted = text
         self._hide_history()
-        self.output.begin_stream()
+
+        store = self._history
+        context: list[dict] = []
+        if store is not None:
+            conv_id = self._active_conversation
+            if conv_id is None:
+                conv_id = store.create_conversation(title=(text or "")[:60])
+                self._active_conversation = conv_id
+            prior = store.conversation_messages(conv_id)
+            context = [{"role": m["role"], "content": m["content"]} for m in prior]
+            store.append_message(conv_id, "user", text)
+            self.output.replace_content(format_conversation(prior + [{"role": "user", "content": text}]))
+        else:
+            self.output.begin_stream()
+
         self._set_status("thinking…")
-        self._engine.submit(text)
+        self._engine.submit(text, context=context)
 
     def _on_stream_start(self, provider: str) -> None:
         self.status.setText(f"streaming · {provider}")
@@ -180,27 +212,30 @@ class Overlay(QWidget):
 
     def _on_stream_done(self, full: str, provider: str = "") -> None:
         anchor = f" · {provider}" if provider else ""
+        conv_id = self._active_conversation
+        store = self._history
         self._busy = False
-        self.output.finalize_stream()
-        if self._history is not None and self._last_submitted:
-            try:
-                self._history.add(self._last_submitted, full, provider)
-            except Exception:
-                log.exception("failed to record history entry")
+        if store is not None and conv_id is not None:
+            store.append_message(conv_id, "assistant", full, provider)
+            self.output.replace_content(format_conversation(store.conversation_messages(conv_id)))
+        else:
+            self.output.finalize_stream()
+        self._active_conversation = None
         self._set_status(f"done{anchor}", flash_ms=2500)
         self._update_size_state()
 
     def _on_stream_failed(self, message: str, provider: str = "") -> None:
         self._busy = False
-        self.output.begin_stream()
-        self.output.add_stream(f"**Error** · {message}")
-        self.output.finalize_stream()
+        self.output.add_stream(f"\n\n**Error** · {message}")
+        self.output.finalize_stream(reset_buffer=False)
+        self._active_conversation = None
         self._set_status("error", flash_ms=5000)
         self._update_size_state()
 
     def _on_stream_cancelled(self) -> None:
         self._busy = False
         self.output.finalize_stream(reset_buffer=False)
+        self._active_conversation = None
         self._set_status("cancelled", flash_ms=1800)
         self._update_size_state()
 
@@ -251,7 +286,11 @@ class Overlay(QWidget):
             self._hide_history()
             self._update_size_state()
             return
-        results = store.search(needle, limit=12) if needle else store.recent(limit=6)
+        results = (
+            store.search_conversations(needle, limit=12)
+            if needle
+            else store.list_conversations(limit=6)
+        )
         self._populate_history(results)
         self._update_size_state()
 
@@ -259,8 +298,9 @@ class Overlay(QWidget):
         widget = self.history_list
         widget.clear()
         for row in rows:
-            item = QListWidgetItem(row["query"])
-            item.setToolTip(row["query"])
+            title = str(row.get("title")) or "Untitled chat"
+            item = QListWidgetItem(title)
+            item.setToolTip(title)
             item.setData(Qt.UserRole, row["id"])
             widget.addItem(item)
         if widget.count() == 0:
@@ -274,12 +314,18 @@ class Overlay(QWidget):
         self._update_size_state()
 
     def _on_history_selected(self, item) -> None:
-        if self._history is None:
+        conv_id = item.data(Qt.UserRole)
+        if isinstance(conv_id, int):
+            self._open_conversation(conv_id)
+
+    def _open_conversation(self, conv_id: int) -> None:
+        if self._history is None or self._busy:
             return
-        query = item.text()
-        self.search.setText(query)
-        self.search.setCursorPosition(len(query))
+        self._active_conversation = conv_id
+        messages = self._history.conversation_messages(conv_id)
+        self.output.replace_content(format_conversation(messages))
         self._hide_history()
+        self._update_size_state()
 
     # -- theming -----------------------------------------------------------
 
@@ -309,11 +355,10 @@ class Overlay(QWidget):
 
     def _prepare_show(self, initial_text: str) -> None:
         self._programmatic_hide = False
+        self._active_conversation = None
         if self._animating:
             self._animation.stop()
         if not self._busy:
-            if self.output.current_markdown():
-                self.output.begin_stream()
             self.status.hide()
             self._hide_history()
         self._update_size_state()
