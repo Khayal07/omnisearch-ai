@@ -32,6 +32,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "temperature": 0.7,
     "max_tokens": 2048,
     "history_limit": 500,
+    "tool_calling": True,
     "system_prompt": (
         "You are OmniSearch AI, a concise, accurate desktop assistant. "
         "Answer directly using Markdown for formatting."
@@ -338,6 +339,16 @@ class ConfigManager:
     @property
     def history_db_path(self) -> Path:
         return self.config_dir / "history.db"
+
+    @property
+    def apps_db_path(self) -> Path:
+        """SQLite store for the Start Menu app index."""
+        return self.config_dir / "apps.db"
+
+    @property
+    def files_db_path(self) -> Path:
+        """SQLite store for the fast local file index."""
+        return self.config_dir / "files.db"
 
     @property
     def log_dir(self) -> Path:
