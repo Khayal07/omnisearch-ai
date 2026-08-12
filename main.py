@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 if sys.platform == "win32":
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
@@ -72,7 +73,9 @@ def run() -> int:
         wake_existing_instance()
         return 0
 
-    cfg = ConfigManager()
+    cfg = ConfigManager(
+        dotenv_paths=[Path(__file__).resolve().parent / ".env"]
+    )
     app = QApplication(sys.argv)
     _configure_qt(app)
 

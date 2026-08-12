@@ -242,11 +242,13 @@ class ConfigManager:
         self,
         config_dir: Path | str | None = None,
         secrets_backend: str = "dpapi",
+        dotenv_paths: list[Path | str] | None = None,
     ) -> None:
         self.config_dir = Path(config_dir) if config_dir else default_config_dir()
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.config_path = self.config_dir / "config.json"
         self.secrets = SecretsManager(self.config_dir / "secrets.dat", backend=secrets_backend)
+        self._dotenv_paths = [Path(p) for p in (dotenv_paths or [])]
         self._env: dict[str, str] = {}
         self._data: dict[str, Any] = json.loads(json.dumps(DEFAULT_CONFIG))
         self.load()
@@ -255,7 +257,7 @@ class ConfigManager:
 
     def load(self) -> None:
         self._env = {}
-        for dotenv in (self.config_dir / ".env", Path.cwd() / ".env"):
+        for dotenv in [self.config_dir / ".env", *self._dotenv_paths]:
             if dotenv.is_file():
                 try:
                     self._env.update(parse_dotenv(dotenv.read_text(encoding="utf-8")))
