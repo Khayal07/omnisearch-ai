@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QLineEdit, QTextBrowser
 
 
@@ -22,16 +23,13 @@ class SearchBar(QLineEdit):
         self.setAttribute(Qt.WA_MacShowFocusRect, False)
 
     def keyPressEvent(self, event):
-        from PySide6.QtGui import QKeySequence
-
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
             text = self.text().strip()
             if text:
                 self.submitted.emit(text)
             event.accept()
             return
-        clear_shortcut = QKeySequence(QKeySequence.StandardKey.DeleteStartOfWord)
-        if event.matches(clear_shortcut):
+        if event.matches(QKeySequence.StandardKey.DeleteStartOfWord):
             cur = self.cursorPosition()
             self.setText(self.text()[:cur])
             self.setCursorPosition(cur)
