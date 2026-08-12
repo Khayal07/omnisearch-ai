@@ -1,0 +1,1 @@
+A lightweight, Raycast-inspired Windows search overlay powered by AI. Supports OpenAI, Gemini, and local Ollama streaming via instant global hotkey (Alt + Space).
