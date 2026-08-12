@@ -24,6 +24,24 @@ CREATE TABLE IF NOT EXISTS history (
 );
 CREATE INDEX IF NOT EXISTS idx_history_created ON history (created_at);
 CREATE INDEX IF NOT EXISTS idx_history_query   ON history (query);
+
+CREATE TABLE IF NOT EXISTS conversations (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    title      TEXT    NOT NULL DEFAULT '',
+    created_at REAL    NOT NULL,
+    updated_at REAL   NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations (updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    role            TEXT    NOT NULL,
+    content         TEXT    NOT NULL,
+    provider        TEXT    NOT NULL DEFAULT '',
+    created_at      REAL    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id, id);
 """
 
 
@@ -97,6 +115,88 @@ class HistoryStore:
 
     def count(self) -> int:
         return int(self._conn.execute("SELECT COUNT(*) FROM history").fetchone()[0])
+
+    # -- conversations (multi-turn chat history) --------------------------
+
+    def create_conversation(self, title: str = "") -> int:
+        """Create a new chat and return its id."""
+        now = time.time()
+        cursor = self._conn.execute(
+            "INSERT INTO conversations (title, created_at, updated_at) VALUES (?, ?, ?)",
+            ((title or "").strip(), now, now),
+        )
+        self._conn.commit()
+        return int(cursor.lastrowid)
+
+    def append_message(
+        self, conversation_id: int, role: str, content: str, provider: str = ""
+    ) -> int:
+        """Append one turn to a conversation; bumps its updated_at."""
+        content = (content or "").strip()
+        if not content:
+            return 0
+        cursor = self._conn.execute(
+            "INSERT INTO messages (conversation_id, role, content, provider, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (conversation_id, role, content, provider or "", time.time()),
+        )
+        self._conn.execute(
+            "UPDATE conversations SET updated_at = ? WHERE id = ?",
+            (time.time(), conversation_id),
+        )
+        self._conn.commit()
+        return int(cursor.lastrowid)
+
+    def list_conversations(self, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self._conn.execute(
+            "SELECT id, title, created_at, updated_at FROM conversations "
+            "ORDER BY updated_at DESC, id DESC LIMIT ?",
+            (max(int(limit), 1),),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def search_conversations(
+        self, needle: str, limit: int = 12
+    ) -> list[dict[str, Any]]:
+        """Case-insensitive substring search over conversation titles."""
+        needle = (needle or "").strip()
+        if not needle:
+            return self.list_conversations(limit)
+        pattern = f"%{needle}%"
+        rows = self._conn.execute(
+            "SELECT id, title, created_at, updated_at FROM conversations "
+            "WHERE title LIKE ? COLLATE NOCASE "
+            "ORDER BY instr(lower(title), lower(?)) ASC, updated_at DESC, id DESC "
+            "LIMIT ?",
+            (pattern, needle, max(int(limit), 1)),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def conversation_messages(
+        self, conversation_id: int, limit: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Read a conversation's turns in chronological order.
+
+        With `limit` set, only the most recent `limit` messages are returned
+        (oldest of those first), which caps the provider context window.
+        """
+        if limit is None:
+            rows = self._conn.execute(
+                "SELECT id, conversation_id, role, content, provider, created_at "
+                "FROM messages WHERE conversation_id = ? ORDER BY id ASC",
+                (conversation_id,),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT id, conversation_id, role, content, provider, created_at "
+                "FROM (SELECT * FROM messages WHERE conversation_id = ? "
+                "      ORDER BY id DESC LIMIT ?) ORDER BY id ASC",
+                (conversation_id, max(int(limit), 1)),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def total_messages(self) -> int:
+        return int(self._conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0])
 
     def close(self) -> None:
         try:
