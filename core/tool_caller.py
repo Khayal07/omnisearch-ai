@@ -31,6 +31,18 @@ class ToolCaller:
         self._file_search = FileSearch(files_db_path) if files_db_path else None
         self._file_reader = FileContentReader()
 
+    # -- warm-up ------------------------------------------------------------
+
+    def scan_apps(self) -> None:
+        """Populate the Start Menu app index (fast; skips when already warm)."""
+        if self._app_indexer is not None:
+            self._app_indexer.scan()
+
+    def index_files(self) -> None:
+        """Populate the local file index if it is still empty (may block)."""
+        if self._file_search is not None:
+            self._file_search.ensure_index()
+
     # -- individual tools ---------------------------------------------------
 
     def search_files(self, query: str, extension: str | None = None) -> str:

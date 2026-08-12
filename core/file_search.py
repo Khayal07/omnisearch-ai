@@ -17,6 +17,7 @@ import datetime
 import logging
 import os
 import sqlite3
+import threading
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -43,7 +44,8 @@ class FileSearch:
     def __init__(self, db_path: Path | str) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path))
+        self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self._build_lock = threading.Lock()
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS files (
@@ -130,6 +132,20 @@ class FileSearch:
 
     # -- searching ----------------------------------------------------------
 
+    def ensure_index(self) -> None:
+        """Build the file index once if it is empty (blocking, thread-safe).
+
+        Runs lazily: the first ``search()`` or an explicit warm-up populates
+        the common user folders so local searches actually return results.
+        """
+        if self.count() > 0:
+            return
+        with self._build_lock:
+            if self.count() > 0:
+                return
+            for root in default_index_roots():
+                self.index_root(root)
+
     def search(
         self,
         query: str,
@@ -137,6 +153,7 @@ class FileSearch:
         limit: int = 50,
     ) -> list[dict]:
         """Return up to ``limit`` matches for ``query`` (by file name)."""
+        self.ensure_index()
         needle = (query or "").strip().casefold()
         ext_needed = (extension or "").strip().lower().lstrip(".").replace(" ", "")
         if ext_needed:

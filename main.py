@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 from pathlib import Path
 
 if sys.platform == "win32":
@@ -94,6 +95,10 @@ def run() -> int:
 
     engine = AIEngine(cfg)
     overlay.attach_engine(engine)
+
+    # Warm up the local app/file indexes in the background so launch/search
+    # tools return real results instead of empty matches.
+    threading.Thread(target=engine.warm_up, name="local-index-warmup", daemon=True).start()
 
     history = HistoryStore(cfg.history_db_path, limit=cfg.get("history_limit", 500))
     overlay.set_history(history)

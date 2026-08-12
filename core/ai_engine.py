@@ -713,6 +713,19 @@ class AIEngine(QObject):
         self._worker: EngineWorker | None = None
         self._tool_caller = ToolCaller(config.apps_db_path, config.files_db_path)
 
+    def warm_up(self) -> None:
+        """Populate the local app/file indexes so tools answer instantly.
+
+        Safe to run on a background thread; both stores use ``check_same_thread
+        = False`` connections and the builds are idempotent (already-warm
+        caches are skipped).
+        """
+        try:
+            self._tool_caller.scan_apps()
+            self._tool_caller.index_files()
+        except Exception:  # noqa: BLE001
+            log.exception("local tool warm-up failed")
+
     @property
     def is_running(self) -> bool:
         worker = self._worker

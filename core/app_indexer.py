@@ -89,7 +89,8 @@ class AppIndexer:
     def __init__(self, db_path: Path | str, start_menu_dirs: list[Path] | None = None) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.db_path))
+        self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self._scan_attempted = False
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS apps (
@@ -116,6 +117,11 @@ class AppIndexer:
         self._name_index: dict[str, str] = {}
         for name, path in rows:
             self._name_index[(name or "").casefold()] = path
+
+    def _ensure_scanned(self) -> None:
+        """Populate the app index on first lookup if it is still empty."""
+        if not self._name_index and not self._scan_attempted:
+            self.scan()
 
     def clean_name(self, stem: str) -> str:
         return APP_NAME_CLEAN.sub(" ", stem).strip().title()
@@ -145,10 +151,14 @@ class AppIndexer:
         """Walk every Start Menu folder and index ``.lnk`` shortcuts.
 
         Returns the number of apps added (0 when the cache is already warm
-        and ``force`` is False, so startup stays cheap).
+        and ``force`` is False, so startup stays cheap). A lazy ``search`` /
+        ``find_app`` triggers a scan automatically when the index is empty.
         """
         if self._remaining() > 0 and not force:
             return 0
+        if self._scan_attempted and not force:
+            return 0
+        self._scan_attempted = True
         added = 0
         for root in self.start_menu_dirs:
             for lnk in Path(root).rglob("*.lnk"):
@@ -178,6 +188,7 @@ class AppIndexer:
         needle = (query or "").strip()
         if not needle:
             return self.list_apps(limit=limit)
+        self._ensure_scanned()
         pattern = f"%{needle}%"
         rows = self._conn.execute(
             """
@@ -206,6 +217,7 @@ class AppIndexer:
         needle = (query or "").casefold().strip()
         if not needle:
             return None
+        self._ensure_scanned()
         if needle in self._name_index:
             path = self._name_index[needle]
             return {"name": query, "path": path}

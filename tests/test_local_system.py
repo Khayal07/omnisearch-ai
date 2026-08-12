@@ -201,6 +201,57 @@ class TestFileSearch:
         finally:
             fs.close()
 
+    def test_index_root_scans_directory(self, tmp_path):
+        root = tmp_path / "docs"
+        root.mkdir()
+        (root / "a.txt").write_text("x")
+        (root / "sub").mkdir()
+        (root / "sub" / "b.md").write_text("y")
+        (root / "junk.bin").write_bytes(b"\x00\x01")
+
+        fs = FileSearch(tmp_path / "files.db")
+        try:
+            assert fs.count() == 0
+            assert fs.index_root(root) == 3
+            assert fs.count() == 3
+        finally:
+            fs.close()
+
+    def test_search_builds_index_lazily_when_empty(self, tmp_path, mocker):
+        root = tmp_path / "data"
+        root.mkdir()
+        (root / "quarterly report.txt").write_text("x")
+        (root / "ignore.md").write_text("y")
+        mocker.patch("core.file_search.default_index_roots", return_value=[root])
+
+        fs = FileSearch(tmp_path / "files.db")
+        try:
+            assert fs.count() == 0
+            hits = fs.search("quarterly")
+            assert fs.count() == 2  # auto-indexed on first search
+            assert hits and hits[0]["name"] == "quarterly report.txt"
+        finally:
+            fs.close()
+
+    def test_warm_up_populates_both_stores(self, tmp_path, mocker):
+        start_menu = tmp_path / "Programs"
+        start_menu.mkdir(parents=True)
+        (start_menu / "Notepad.lnk").write_bytes(
+            b"\x4c\x00\x00\x00\x01\x14\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x46" + b"\x00" * 56
+        )
+        root = tmp_path / "appdata"
+        root.mkdir()
+        (root / "notes.txt").write_text("hello")
+        mocker.patch("core.app_indexer._default_start_menu_dirs", return_value=[start_menu])
+        mocker.patch("core.file_search.default_index_roots", return_value=[root])
+
+        caller = ToolCaller(tmp_path / "apps.db", tmp_path / "files.db")
+        caller.scan_apps()
+        caller.index_files()
+
+        assert caller._app_indexer.find_app("notepad") is not None
+        assert caller._file_search.search("notes")
+
 
 # ---------------------------------------------------------------------------
 # File content reader
