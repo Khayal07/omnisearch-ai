@@ -57,6 +57,23 @@ def mock_sse(handler):
     return httpx.AsyncClient(transport=httpx.MockTransport(handler))
 
 
+def _async_client_factory(body: str):
+    """Return a factory that builds a *fresh* AsyncClient per call.
+
+    Each worker query opens and closes its own client, so a fresh instance must
+    be created for every submission (a shared client would be already-closed by
+    the second query).
+    """
+
+    def factory() -> httpx.AsyncClient:
+        return httpx.AsyncClient(
+            timeout=10,
+            transport=httpx.MockTransport(lambda req: httpx.Response(200, text=body)),
+        )
+
+    return factory
+
+
 MESSAGES = [
     {"role": "system", "content": "You are OmniSearch."},
     {"role": "user", "content": "hello"},
@@ -324,13 +341,8 @@ class TestEngineWorker:
         mocker.patch.object(
             ai_engine,
             "_build_client",
-            return_value=httpx.AsyncClient(
-                timeout=10,
-                transport=httpx.MockTransport(
-                    lambda req: httpx.Response(
-                        200, text=sse_body(openai_chunk("Hi "), openai_chunk("there"))
-                    )
-                ),
+            side_effect=_async_client_factory(
+                sse_body(openai_chunk("Hi "), openai_chunk("there"))
             ),
         )
 
@@ -344,7 +356,6 @@ class TestEngineWorker:
         engine.done.connect(lambda full, provider: results.append((full, provider)))
 
         try:
-            engine.start()
             engine.submit("hello")
             qtbot.waitUntil(lambda: len(results) == 1, timeout=5000)
         finally:
@@ -355,3 +366,75 @@ class TestEngineWorker:
         assert provider == "openai"
         assert "".join(received) == "Hi there"
         assert provider_calls == ["openai"]
+
+    def test_each_query_gets_a_fresh_worker(self, tmp_path, qapp, qtbot, mocker):
+        """Second and subsequent queries must use a brand-new worker thread,
+        never a restarted/retired one."""
+        from core.ai_engine import AIEngine, EngineWorker
+
+        cfg = make_config(tmp_path)
+        cfg.set("provider", "openai")
+
+        mocker.patch.object(
+            ai_engine,
+            "_build_client",
+            side_effect=_async_client_factory(
+                sse_body(openai_chunk("Hi "), openai_chunk("there"))
+            ),
+        )
+
+        engine = AIEngine(cfg)
+        results = []
+        engine.done.connect(lambda full, provider: results.append(full))
+
+        spawned = []
+
+        original = EngineWorker.__init__
+
+        def tracking_init(self, config, request_text, parent=None):
+            spawned.append(request_text)
+            original(self, config, request_text, parent)
+
+        mocker.patch.object(EngineWorker, "__init__", tracking_init)
+
+        try:
+            engine.submit("query-one")
+            qtbot.waitUntil(lambda: len(results) == 1, timeout=5000)
+            engine.submit("query-two")
+            qtbot.waitUntil(lambda: len(results) == 2, timeout=5000)
+            engine.submit("query-three")
+            qtbot.waitUntil(lambda: len(results) == 3, timeout=5000)
+        finally:
+            engine.stop()
+
+        assert results == ["Hi there", "Hi there", "Hi there"]
+        # One brand-new EngineWorker per submission.
+        assert spawned == ["query-one", "query-two", "query-three"]
+
+    def test_submit_while_busy_is_ignored(self, tmp_path, qapp, qtbot, mocker):
+        from core.ai_engine import AIEngine
+
+        cfg = make_config(tmp_path)
+        cfg.set("provider", "openai")
+
+        body = sse_body(openai_chunk("slow "))
+        mocker.patch.object(
+            ai_engine,
+            "_build_client",
+            side_effect=_async_client_factory(body),
+        )
+
+        engine = AIEngine(cfg)
+        results = []
+        engine.done.connect(lambda full, provider: results.append(full))
+
+        try:
+            engine.submit("first")
+            # Immediately submitting again while the first is in flight must
+            # not queue a second request or spawn a second worker.
+            engine.submit("second")
+            qtbot.waitUntil(lambda: len(results) == 1, timeout=5000)
+            qtbot.wait(100)
+            assert len(results) == 1
+        finally:
+            engine.stop()

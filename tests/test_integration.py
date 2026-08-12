@@ -54,6 +54,58 @@ def _stream_openai_line(content: str) -> str:
 
 
 class TestE2EStream:
+    def test_two_queries_in_a_row_both_render(self, qtbot, tmp_path, mocker):
+        """Regression: subsequent queries must stream tokens again (fresh worker
+        per query, response panel cleared between cycles)."""
+        body = "".join(
+            [_stream_openai_line("Hello "), _stream_openai_line("world"), "data: [DONE]\n"]
+        )
+
+        def client_factory():
+            return httpx.AsyncClient(
+                timeout=10,
+                transport=httpx.MockTransport(
+                    lambda req: httpx.Response(200, text=body)
+                ),
+            )
+
+        mocker.patch.object(ai_engine, "_build_client", side_effect=client_factory)
+
+        from core.ai_engine import AIEngine
+
+        hist = HistoryStore(tmp_path / "twoq.db")
+        cfg = _cfg(tmp_path)
+        engine = AIEngine(cfg)
+        win = Overlay()
+        win.set_history(hist)
+        win.attach_engine(engine)
+        qtbot.addWidget(win)
+        win.show()
+
+        done_count = []
+        engine.done.connect(lambda full, provider: done_count.append(full))
+
+        try:
+            win.search.setText("question one")
+            with qtbot.waitSignal(engine.done, timeout=5000):
+                QTest.keyClick(win.search, Qt.Key_Return)
+            qtbot.waitUntil(lambda: win._busy is False, timeout=2000)
+            assert win.output.toPlainText() == "Hello world"
+
+            win.search.setText("question two")
+            with qtbot.waitSignal(engine.done, timeout=5000):
+                QTest.keyClick(win.search, Qt.Key_Return)
+            qtbot.waitUntil(lambda: win._busy is False, timeout=2000)
+            assert win.output.toPlainText() == "Hello world"
+
+            assert len(done_count) == 2
+            assert hist.search("question two")
+            assert hist.count() == 2
+            win.dismiss()
+        finally:
+            engine.stop()
+            hist.close()
+
     def test_submit_streams_into_overlay_and_records_history(
         self, qtbot, tmp_path, mocker
     ):

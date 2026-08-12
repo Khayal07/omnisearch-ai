@@ -15,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from threading import Event
 from typing import Awaitable, Callable, Iterable
 
 import httpx
@@ -348,11 +347,13 @@ async def run_request(
 # Qt worker thread
 # ---------------------------------------------------------------------------
 
-_STOP = object()
-
-
 class EngineWorker(QThread):
-    """Runs an asyncio event loop and drains a FIFO of requests."""
+    """One-shot worker: handles exactly one request, then finishes.
+
+    A *fresh* instance is created for every query so the thread and its
+    asyncio event loop are never reused across requests. The AIEngine reaps
+    each finished worker with ``finished -> deleteLater()``.
+    """
 
     started = Signal(str)
     chunk = Signal(str)
@@ -360,21 +361,14 @@ class EngineWorker(QThread):
     failed = Signal(str, str)
     cancelled = Signal()
 
-    def __init__(self, config: ConfigManager, parent: QObject | None = None) -> None:
+    def __init__(self, config: ConfigManager, request_text: str, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._config = config
-        self._requests: list = []
-        self._queue_guard = Event()
-        self._stop_flag = False
+        self._request = request_text
         self._loop = None
         self._future = None
 
     # -- public control ----------------------------------------------------
-
-    def submit(self, text: str) -> None:
-        self._queue_guard.clear()
-        self._requests.append(text)
-        self._queue_guard.set()
 
     def cancel_current(self) -> None:
         loop = self._loop
@@ -385,37 +379,23 @@ class EngineWorker(QThread):
             except Exception:
                 pass
 
-    def shutdown(self) -> None:
-        self._stop_flag = True
-        self._queue_guard.set()
-        self.wait(5000)
-
     # -- thread body -------------------------------------------------------
 
     def run(self) -> None:
         loop = asyncio.new_event_loop()
         self._loop = loop
         try:
-            while not self._stop_flag:
-                self._queue_guard.wait(0.5)
-                if not self._requests:
-                    self._queue_guard.clear()
-                    continue
-                text = self._requests.pop(0)
-                if text is _STOP:
-                    break
-                try:
-                    self._future = loop.create_task(self._do(text))
-                    loop.run_until_complete(self._future)
-                except asyncio.CancelledError:
-                    self.cancelled.emit()
-                    log.info("request cancelled by user")
-                except Exception as exc:  # noqa: BLE001
-                    log.exception("request failed")
-                    self.failed.emit(str(exc), "")
-                finally:
-                    self._future = None
+            self._future = loop.create_task(self._stream())
+            try:
+                loop.run_until_complete(self._future)
+            except asyncio.CancelledError:
+                log.info("request cancelled by user")
+                self.cancelled.emit()
+            except Exception as exc:  # noqa: BLE001
+                log.exception("request failed")
+                self.failed.emit(str(exc), "")
         finally:
+            self._future = None
             try:
                 loop.run_until_complete(loop.shutdown_asyncgens())
             except Exception:
@@ -423,31 +403,31 @@ class EngineWorker(QThread):
             loop.close()
             self._loop = None
 
-    async def _do(self, text: str) -> str:
+    async def _stream(self) -> None:
         config = self._config
-        system, query = prepare_prompt(config, text)
+        system, query = prepare_prompt(config, self._request)
         messages = [
             {"role": "system", "content": system},
-            {"role": "user", "content": query if query else text},
+            {"role": "user", "content": query if query else self._request},
         ]
         chain = provider_chain(config)
-
-        def emit_start(provider: str) -> None:
-            self.started.emit(provider)
-
         async with _build_client() as client:
             full, provider = await run_request(
                 config, chain, messages,
                 on_chunk=self.chunk.emit,
-                on_provider=emit_start,
+                on_provider=self.started.emit,
                 client=client,
             )
         self.done.emit(full, provider)
-        return full
 
 
 class AIEngine(QObject):
-    """Thread-safe facade the GUI talks to."""
+    """Frames each query with a brand-new EngineWorker thread.
+
+    Signals started / chunk / done / failed / cancelled are forwarded straight
+    through to the GUI. A worker that has finished is dropped and scheduled
+    for deletion (``finished -> deleteLater()``), never restarted.
+    """
 
     started = Signal(str)
     chunk = Signal(str)
@@ -457,28 +437,43 @@ class AIEngine(QObject):
 
     def __init__(self, config: ConfigManager, parent: QObject | None = None) -> None:
         super().__init__(parent)
-        self._worker = EngineWorker(config)
-        self._worker.started.connect(self.started)
-        self._worker.chunk.connect(self.chunk)
-        self._worker.done.connect(self.done)
-        self._worker.failed.connect(self.failed)
-        self._worker.cancelled.connect(self.cancelled)
+        self._config = config
+        self._worker: EngineWorker | None = None
 
     @property
     def is_running(self) -> bool:
-        return self._worker.isRunning()
-
-    def start(self) -> None:
-        if not self._worker.isRunning():
-            self._worker.start()
+        worker = self._worker
+        return worker is not None and worker.isRunning()
 
     def submit(self, text: str) -> None:
-        self.start()
-        self._worker.submit(text)
+        """Launch a fresh worker thread for `text`. Ignores queuing while busy."""
+        if self.is_running:
+            log.debug("ignoring submit while a request is already in flight")
+            return
+        worker = EngineWorker(self._config, text)
+        worker.started.connect(self.started)
+        worker.chunk.connect(self.chunk)
+        worker.done.connect(self.done)
+        worker.failed.connect(self.failed)
+        worker.cancelled.connect(self.cancelled)
+        worker.finished.connect(self._on_worker_finished)
+        worker.finished.connect(worker.deleteLater)
+        self._worker = worker
+        log.info("starting worker thread for new query")
+        worker.start()
+
+    def _on_worker_finished(self) -> None:
+        worker = self.sender()
+        if worker is not None and worker is self._worker:
+            self._worker = None
 
     def cancel(self) -> None:
-        self._worker.cancel_current()
+        worker = self._worker
+        if worker is not None:
+            worker.cancel_current()
 
     def stop(self) -> None:
-        self._worker.cancel_current()
-        self._worker.shutdown()
+        worker = self._worker
+        if worker is not None:
+            worker.cancel_current()
+            worker.wait(3000)
