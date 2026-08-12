@@ -43,10 +43,12 @@ Built with **Python 3.12** + **PySide6**. Windows only.
 
 ## Requirements
 
-- Windows 10/11
+- Windows 10/11 (Python scripts use Win32 APIs: DPAPI, RegisterHotKey, named mutex)
 - Python 3.12+ (3.11 likely works, untested)
-- A provider key (OpenAI / Gemini) **or** a local Ollama server — Ollama runs
-  fully offline.
+- **One of**:
+  - an OpenAI, Gemini, or other OpenAI-compatible API key, **or**
+  - a local [Ollama](https://ollama.com) server (fully offline, no key needed),
+    e.g. `ollama run qwen2.5:7b`
 
 ## Installation
 
@@ -60,9 +62,41 @@ Copy-Item .env.example .env  # fill in your keys (or use Settings dialog)
 python main.py
 ```
 
+### What gets installed (`requirements.txt`)
+
+| Package          | Purpose                              |
+| ---------------- | ------------------------------------ |
+| `PySide6>=6.7`   | Qt GUI: overlay window, tray, settings |
+| `httpx>=0.27`    | Async streaming HTTP (SSE / NDJSON)  |
+| `pytest>=8` …    | Dev/test only (see Testing below)    |
+
+Everything else ships with the Python standard library — no other runtime
+dependencies.
+
 > API keys entered in Settings are stored encrypted (Windows DPAPI). Alternatively
 > put them in `.env` or export them as OS environment variables. Lookup order:
 > Settings store → `.env` → OS environment.
+
+---
+
+## Usage
+
+1. **Summon** the overlay with the global hotkey (`Alt+Space` by default;
+   rebind in Settings). It appears on the screen under your cursor.
+2. **Ask** anything — type and press Enter. The answer streams in live Markdown
+   (Ctrl+Scroll to zoom). Every query opens or continues a chat inside the
+   overlay; the conversation history (up to 200 chats) is listed when the input
+   is empty, and "New chat" starts a fresh one.
+3. **Local tools are automatic** — no API calls needed for these:
+   - `launch Notepad` → launches the app from the Start Menu index.
+   - `search for quarterly report` → returns real matching files.
+   - `summarize C:\...\notes.pdf` → reads and summarizes the file.
+4. **Quick actions** — prefix your prompt with `/code`, `/explain`, `/sum`,
+   `/web`, or `/fix` to use a specialised system prompt.
+5. **Settings** (tray menu) — provider + model, theme, hotkey capture, API keys,
+   auto-start at login.
+6. Leave it running in the tray — a second launch finds the live instance
+   instead of starting a duplicate.
 
 ---
 
@@ -152,4 +186,13 @@ tools (indexing, search performance, file reading, tool dispatch).
 
 ## License
 
-See repository metadata. (Internal project.)
+This project is released under the **MIT License** — see the
+[LICENSE](LICENSE) file for the full text.
+
+In short, you are free to use, copy, modify, merge, publish, distribute,
+sublicense, and sell copies of the software, provided the copyright notice and
+permission notice are preserved in all copies or substantial portions. The
+software is provided "AS IS", without warranty of any kind.
+
+> Note: the project's AI providers (OpenAI, Google Gemini, Ollama) are **not**
+> part of this licensed code — they remain governed by their own terms.
