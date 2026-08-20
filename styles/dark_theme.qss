@@ -188,7 +188,31 @@ QScrollBar::sub-page:horizontal {
 /* ---- Settings dialog -------------------------------------------- */
 
 QDialog#settingsDialog {
+    background: transparent;
+}
+
+QFrame#settingsCard {
     background-color: #1d1f26;
+    border: 1px solid rgba(255, 255, 255, 12);
+    border-radius: 14px;
+}
+
+QWidget#settingsHeader {
+    background: transparent;
+}
+
+QPushButton#closeButton {
+    background: rgba(255, 255, 255, 6);
+    color: #a6adbd;
+    border: 1px solid rgba(255, 255, 255, 12);
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+QPushButton#closeButton:hover {
+    background: rgba(255, 255, 255, 12);
+    color: #f2f3f7;
+    border: 1px solid rgba(255, 255, 255, 26);
 }
 
 QLabel#dialogTitle {

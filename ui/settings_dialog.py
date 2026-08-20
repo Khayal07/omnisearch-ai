@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDoubleSpinBox,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -120,6 +121,36 @@ class HotkeyCapture(QLineEdit):
         event.accept()
 
 
+class _SettingsHeader(QWidget):
+    """Draggable, frameless dialog header (click-drag moves the window)."""
+
+    def __init__(self, dialog: QDialog, parent=None) -> None:
+        super().__init__(parent)
+        self._dialog = dialog
+        self._drag_pos = None
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self._drag_pos = (
+                event.globalPosition().toPoint()
+                - self._dialog.frameGeometry().topLeft()
+            )
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._drag_pos is not None and event.buttons() & Qt.LeftButton:
+            self._dialog.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        self._drag_pos = None
+        super().mouseReleaseEvent(event)
+
+
 class SettingsDialog(QDialog):
     """Modal options panel. Instance writes through to the ConfigManager."""
 
@@ -129,6 +160,10 @@ class SettingsDialog(QDialog):
         self.setObjectName("settingsDialog")
         self.setWindowTitle("OmniSearch AI — Settings")
         self.setModal(True)
+        self.setWindowFlags(
+            Qt.Dialog | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setMinimumWidth(520)
 
         self._build_ui()
@@ -146,21 +181,43 @@ class SettingsDialog(QDialog):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        header = QWidget(self)
-        header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(22, 16, 22, 12)
-        header_layout.setSpacing(2)
+        card = QFrame(self)
+        card.setObjectName("settingsCard")
+        outer.addWidget(card)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.setSpacing(0)
+
+        header = _SettingsHeader(self, card)
+        header.setObjectName("settingsHeader")
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(22, 16, 14, 12)
+        header_layout.setSpacing(8)
+
+        title_block = QVBoxLayout()
+        title_block.setSpacing(2)
         self.dialog_title = QLabel("OmniSearch AI", header)
         self.dialog_title.setObjectName("dialogTitle")
         self.dialog_subtitle = QLabel(
             "Configure providers, hotkeys and behavior", header
         )
         self.dialog_subtitle.setObjectName("dialogSubtitle")
-        header_layout.addWidget(self.dialog_title)
-        header_layout.addWidget(self.dialog_subtitle)
-        outer.addWidget(header)
+        title_block.addWidget(self.dialog_title)
+        title_block.addWidget(self.dialog_subtitle)
+        header_layout.addLayout(title_block)
+        header_layout.addStretch(1)
 
-        scroll = QScrollArea(self)
+        close_btn = QPushButton("\u2715", header)
+        close_btn.setObjectName("closeButton")
+        close_btn.setToolTip("Close settings")
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setFixedSize(28, 28)
+        close_btn.clicked.connect(self.reject)
+        header_layout.addWidget(close_btn, alignment=Qt.AlignTop)
+        card_layout.addWidget(header)
+
+        scroll = QScrollArea(card)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
 
@@ -244,20 +301,20 @@ class SettingsDialog(QDialog):
         form.addRow("System prompt", self.system_prompt)
 
         scroll.setWidget(body)
-        outer.addWidget(scroll, stretch=1)
+        card_layout.addWidget(scroll, stretch=1)
 
         buttons = QHBoxLayout()
         buttons.setContentsMargins(22, 10, 22, 16)
         buttons.addStretch(1)
-        cancel = QPushButton("Cancel", self)
+        cancel = QPushButton("Cancel", card)
         cancel.clicked.connect(self.reject)
-        save = QPushButton("Save", self)
+        save = QPushButton("Save", card)
         save.setObjectName("primaryButton")
         save.setDefault(True)
         save.clicked.connect(self.accept)
         buttons.addWidget(cancel)
         buttons.addWidget(save)
-        outer.addLayout(buttons)
+        card_layout.addLayout(buttons)
 
     # -- value loading -----------------------------------------------------
 
