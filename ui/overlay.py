@@ -214,19 +214,23 @@ class Overlay(QWidget):
         self.search.textChanged.connect(self._on_text_changed)
         self.search.submitted.connect(self.submitted)
 
-    def _add_search_icon(self) -> None:
+    def _add_search_icon(self, color: str = "#8a93a8") -> None:
         """Leading magnifier glyph drawn programmatically (no asset files)."""
+        if getattr(self, "_search_icon_action", None) is not None:
+            self.search.removeAction(self._search_icon_action)
         pixmap = QPixmap(16, 16)
         pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        pen = QPen(QColor("#8f9bb3"), 1.7, Qt.SolidLine, Qt.RoundCap)
+        pen = QPen(QColor(color), 1.7, Qt.SolidLine, Qt.RoundCap)
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
         painter.drawEllipse(3, 3, 8, 8)
         painter.drawLine(9, 9, 14, 14)
         painter.end()
-        self.search.addAction(QIcon(pixmap), QLineEdit.ActionPosition.LeadingPosition)
+        self._search_icon_action = self.search.addAction(
+            QIcon(pixmap), QLineEdit.ActionPosition.LeadingPosition
+        )
 
     def _apply_card_shadow(self) -> None:
         """Soft drop-shadow so the floating card lifts off the desktop."""
@@ -491,6 +495,7 @@ class Overlay(QWidget):
             self.setStyleSheet(theme_stylesheet(theme))
         except OSError as exc:
             log.warning("failed to load theme %r: %s", theme, exc)
+        self._add_search_icon("#8a93a8" if theme == "dark" else "#5b6478")
         self.output.apply_theme(theme)
 
     # -- summon / dismiss --------------------------------------------------

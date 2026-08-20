@@ -42,7 +42,7 @@ def build_tray_icon() -> QIcon:
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.NoPen)
-    painter.setBrush(QColor("#4a6cf7"))
+    painter.setBrush(QColor("#5b6478"))
     painter.drawRoundedRect(4, 4, 56, 56, 14, 14)
     painter.setPen(QPen(QColor("white"), 5, Qt.SolidLine, Qt.RoundCap))
     painter.drawEllipse(22, 20, 18, 18)
