@@ -46,6 +46,33 @@ class StreamingMarkdown(QTextBrowser):
 
     append_block = Signal(object)
 
+    _DOC_STYLES = {
+        "dark": (
+            "code { background: rgba(255,255,255,0.08); border-radius: 3px;"
+            " padding: 1px 4px; font-family: Consolas, monospace; }"
+            "pre { background: rgba(255,255,255,0.05); padding: 8px;"
+            " border-radius: 6px; }"
+            "a { color: #a8b3c9; }"
+            "h1, h2, h3, h4 { color: #f2f3f7; }"
+            "strong { color: #f2f3f7; }"
+            "blockquote { color: #a6adbd; border-left: 3px solid rgba(138,147,168,60);"
+            " padding-left: 8px; margin-left: 0; }"
+            "hr { border: none; border-top: 1px solid rgba(255,255,255,14); }"
+        ),
+        "light": (
+            "code { background: rgba(15,20,35,0.06); border-radius: 3px;"
+            " padding: 1px 4px; font-family: Consolas, monospace; }"
+            "pre { background: rgba(15,20,35,0.04); padding: 8px;"
+            " border-radius: 6px; }"
+            "a { color: #5b6478; }"
+            "h1, h2, h3, h4 { color: #1f2533; }"
+            "strong { color: #1f2533; }"
+            "blockquote { color: #6a7284; border-left: 3px solid rgba(91,100,120,60);"
+            " padding-left: 8px; margin-left: 0; }"
+            "hr { border: none; border-top: 1px solid rgba(15,20,35,14); }"
+        ),
+    }
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("streamOutput")
@@ -53,11 +80,12 @@ class StreamingMarkdown(QTextBrowser):
         self.setUndoRedoEnabled(False)
         self.document().setDocumentMargin(10)
         self._buffer = ""
+        self.apply_theme("dark")
+
+    def apply_theme(self, theme: str) -> None:
+        """Re-apply the inline code/pre/link styles for ``theme``."""
         self.document().setDefaultStyleSheet(
-            "code { background: rgba(255,255,255,0.08); border-radius: 3px;"
-            " padding: 1px 4px; font-family: Consolas, monospace; }"
-            "pre { background: rgba(255,255,255,0.05); padding: 8px;"
-            " border-radius: 6px; } a { color: #6c8cff; }"
+            self._DOC_STYLES.get(theme, self._DOC_STYLES["dark"])
         )
 
     def begin_stream(self) -> None:

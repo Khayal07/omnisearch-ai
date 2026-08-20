@@ -414,6 +414,7 @@ class Overlay(QWidget):
             self.setStyleSheet(theme_stylesheet(theme))
         except OSError as exc:
             log.warning("failed to load theme %r: %s", theme, exc)
+        self.output.apply_theme(theme)
 
     # -- summon / dismiss --------------------------------------------------
 

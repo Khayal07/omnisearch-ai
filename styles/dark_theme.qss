@@ -1,17 +1,14 @@
-/* OmniSearch AI — dark glassmorphism theme */
+/* OmniSearch AI — dark theme
+   Muted steel/slate palette. Deep ink (never pure black), hairline borders,
+   custom scrollbars, restrained accent used only for focus/selection. */
 
 QWidget#overlayRoot {
     background: transparent;
 }
 
 QFrame#card {
-    background-color: qlineargradient(
-        x1: 0, y1: 0, x2: 0, y2: 1,
-        stop: 0 rgba(38, 40, 48, 250),
-        stop: 0.55 rgba(28, 29, 36, 250),
-        stop: 1 rgba(22, 23, 29, 250)
-    );
-    border: 1px solid rgba(255, 255, 255, 20);
+    background-color: #1d1f26;
+    border: 1px solid rgba(255, 255, 255, 10);
     border-radius: 16px;
 }
 
@@ -20,45 +17,45 @@ QWidget#headerBar {
 }
 
 QLabel#brandDot {
-    background-color: #6c8cff;
+    background-color: #8a93a8;
     border-radius: 5px;
 }
 
 QLabel#brandLabel {
-    color: #e9eaf0;
+    color: #e8eaf0;
     font-size: 13px;
     font-weight: 600;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.3px;
 }
 
 QLineEdit#searchBar {
-    background-color: rgba(255, 255, 255, 10);
-    color: #f0f0f4;
-    border: 1px solid rgba(255, 255, 255, 16);
+    background-color: rgba(255, 255, 255, 5);
+    color: #f2f3f7;
+    border: 1px solid rgba(255, 255, 255, 12);
     border-radius: 11px;
     padding: 10px 12px;
     font-size: 15px;
-    selection-background-color: #3a57d6;
+    selection-background-color: rgba(138, 147, 168, 45);
     selection-color: #ffffff;
 }
 
 QLineEdit#searchBar:focus {
-    border: 1px solid #6c8cff;
-    background-color: rgba(108, 140, 255, 18);
+    border: 1px solid #8a93a8;
+    background-color: rgba(138, 147, 168, 12);
 }
 
 QLineEdit#searchBar:hover:not(:focus) {
-    border: 1px solid rgba(255, 255, 255, 30);
+    border: 1px solid rgba(255, 255, 255, 24);
 }
 
 QLineEdit#searchBar::placeholder {
-    color: rgba(240, 240, 244, 100);
+    color: rgba(232, 234, 240, 110);
 }
 
 QPushButton#newChatButton {
-    background: rgba(108, 140, 255, 16);
-    color: #bcc8ff;
-    border: 1px solid rgba(108, 140, 255, 70);
+    background: rgba(138, 147, 168, 14);
+    color: #c6cddc;
+    border: 1px solid rgba(138, 147, 168, 60);
     border-radius: 8px;
     padding: 5px 12px;
     font-size: 12px;
@@ -66,65 +63,45 @@ QPushButton#newChatButton {
 }
 
 QPushButton#newChatButton:hover {
-    background: rgba(108, 140, 255, 28);
+    background: rgba(138, 147, 168, 24);
     color: #ffffff;
-    border: 1px solid #6c8cff;
+    border: 1px solid #8a93a8;
 }
 
 QPushButton#newChatButton:pressed {
-    background: rgba(108, 140, 255, 40);
+    background: rgba(138, 147, 168, 36);
 }
 
 QLabel#statusLabel {
-    color: #8f9bb3;
+    color: #9aa1b2;
     font-size: 12px;
     padding-right: 4px;
 }
 
 QTextBrowser#streamOutput {
-    background: rgba(0, 0, 0, 60);
-    border: 1px solid rgba(255, 255, 255, 12);
+    background: rgba(255, 255, 255, 4);
+    border: 1px solid rgba(255, 255, 255, 10);
     border-radius: 10px;
-    color: #e6e7ec;
+    color: #e4e6ec;
     font-size: 13px;
-    selection-background-color: #3a57d6;
+    selection-background-color: rgba(138, 147, 168, 45);
     selection-color: #ffffff;
     padding: 2px;
 }
 
-QTextBrowser#streamOutput QScrollBar:vertical {
-    background: transparent;
-    width: 10px;
-    margin: 4px;
-}
-
-QTextBrowser#streamOutput QScrollBar::handle:vertical {
-    background: rgba(255, 255, 255, 32);
-    border-radius: 4px;
-    min-height: 24px;
-}
-
-QTextBrowser#streamOutput QScrollBar::handle:vertical:hover {
-    background: rgba(255, 255, 255, 64);
-}
-
-QTextBrowser#streamOutput QScrollBar::add-line:vertical,
-QTextBrowser#streamOutput QScrollBar::sub-line:vertical {
-    height: 0;
-}
-
 QLabel#footerHint {
-    color: rgba(240, 240, 244, 105);
+    color: rgba(232, 234, 240, 100);
     font-size: 11px;
 }
 
 QListView#historyList {
-    background: rgba(255, 255, 255, 6);
-    color: #e6e7ec;
-    border: 1px solid rgba(255, 255, 255, 12);
+    background: rgba(255, 255, 255, 4);
+    color: #e4e6ec;
+    border: 1px solid rgba(255, 255, 255, 10);
     border-radius: 9px;
     font-size: 13px;
     padding: 3px;
+    outline: none;
 }
 
 QListView#historyList::item {
@@ -133,33 +110,87 @@ QListView#historyList::item {
 }
 
 QListView#historyList::item:hover {
-    background: rgba(255, 255, 255, 8);
+    background: rgba(255, 255, 255, 7);
 }
 
 QListView#historyList::item:selected {
-    background: rgba(108, 140, 255, 70);
+    background: rgba(138, 147, 168, 26);
     color: #ffffff;
+}
+
+/* ---- Custom scrollbars (app-wide) ------------------------------- */
+
+QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 2px;
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(255, 255, 255, 14);
+    border-radius: 5px;
+    min-height: 28px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: rgba(255, 255, 255, 26);
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 10px;
+    margin: 2px;
+}
+
+QScrollBar::handle:horizontal {
+    background: rgba(255, 255, 255, 14);
+    border-radius: 5px;
+    min-width: 28px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: rgba(255, 255, 255, 26);
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0;
+}
+
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: transparent;
 }
 
 /* ---- Settings dialog -------------------------------------------- */
 
 QDialog#settingsDialog {
-    background-color: #1a1b21;
+    background-color: #1d1f26;
 }
 
 QLabel#dialogTitle {
-    color: #f0f0f4;
+    color: #f2f3f7;
     font-size: 17px;
     font-weight: 700;
 }
 
 QLabel#dialogSubtitle {
-    color: #8f9bb3;
+    color: #9aa1b2;
     font-size: 12px;
 }
 
 QLabel#sectionLabel {
-    color: #6c8cff;
+    color: #8a93a8;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.8px;
@@ -167,7 +198,7 @@ QLabel#sectionLabel {
 }
 
 QDialog#settingsDialog QLabel {
-    color: #c7ccd8;
+    color: #c6cddc;
 }
 
 QDialog#settingsDialog QLineEdit,
@@ -175,12 +206,12 @@ QDialog#settingsDialog QComboBox,
 QDialog#settingsDialog QSpinBox,
 QDialog#settingsDialog QDoubleSpinBox,
 QDialog#settingsDialog QPlainTextEdit {
-    background-color: rgba(255, 255, 255, 10);
-    color: #f0f0f4;
-    border: 1px solid rgba(255, 255, 255, 16);
+    background-color: rgba(255, 255, 255, 5);
+    color: #f2f3f7;
+    border: 1px solid rgba(255, 255, 255, 14);
     border-radius: 8px;
     padding: 7px 9px;
-    selection-background-color: #3a57d6;
+    selection-background-color: rgba(138, 147, 168, 45);
     selection-color: #ffffff;
 }
 
@@ -189,7 +220,7 @@ QDialog#settingsDialog QComboBox:focus,
 QDialog#settingsDialog QSpinBox:focus,
 QDialog#settingsDialog QDoubleSpinBox:focus,
 QDialog#settingsDialog QPlainTextEdit:focus {
-    border: 1px solid #6c8cff;
+    border: 1px solid #8a93a8;
 }
 
 QDialog#settingsDialog QComboBox::drop-down {
@@ -198,52 +229,64 @@ QDialog#settingsDialog QComboBox::drop-down {
 }
 
 QDialog#settingsDialog QComboBox QAbstractItemView {
-    background-color: #22242c;
-    color: #f0f0f4;
-    border: 1px solid rgba(255, 255, 255, 16);
+    background-color: #232630;
+    color: #f2f3f7;
+    border: 1px solid rgba(255, 255, 255, 14);
     border-radius: 8px;
-    selection-background-color: rgba(108, 140, 255, 70);
+    padding: 4px;
+    selection-background-color: rgba(138, 147, 168, 30);
+    selection-color: #ffffff;
+    outline: none;
+}
+
+QDialog#settingsDialog QComboBox QAbstractItemView::item {
+    border-radius: 6px;
+    padding: 4px 8px;
 }
 
 QDialog#settingsDialog QPushButton {
-    background-color: #26282f;
-    color: #e6e7ec;
-    border: 1px solid rgba(255, 255, 255, 20);
+    background-color: #262a33;
+    color: #e4e6ec;
+    border: 1px solid rgba(255, 255, 255, 16);
     border-radius: 8px;
     padding: 8px 18px;
     font-weight: 600;
 }
 
 QDialog#settingsDialog QPushButton:hover {
-    background-color: #30333c;
-    border: 1px solid rgba(255, 255, 255, 34);
+    background-color: #2e323d;
+    border: 1px solid rgba(255, 255, 255, 26);
 }
 
 QDialog#settingsDialog QPushButton#primaryButton {
-    background-color: #4a6cf7;
+    background-color: #4a5060;
     border: none;
     color: #ffffff;
 }
 
 QDialog#settingsDialog QPushButton#primaryButton:hover {
-    background-color: #5a7bfa;
+    background-color: #565d70;
 }
 
 QDialog#settingsDialog QCheckBox {
-    color: #c7ccd8;
+    color: #c6cddc;
 }
 
 QDialog#settingsDialog QCheckBox::indicator {
     width: 16px;
     height: 16px;
-    border: 1px solid rgba(255, 255, 255, 34);
+    border: 1px solid rgba(255, 255, 255, 30);
     border-radius: 4px;
-    background-color: rgba(255, 255, 255, 10);
+    background-color: rgba(255, 255, 255, 5);
+}
+
+QDialog#settingsDialog QCheckBox::indicator:hover {
+    border: 1px solid rgba(255, 255, 255, 46);
 }
 
 QDialog#settingsDialog QCheckBox::indicator:checked {
-    background-color: #4a6cf7;
-    border: 1px solid #4a6cf7;
+    background-color: #8a93a8;
+    border: 1px solid #8a93a8;
 }
 
 QDialog#settingsDialog QScrollArea {
@@ -254,9 +297,9 @@ QDialog#settingsDialog QScrollArea {
 /* ---- Menus / tray ----------------------------------------------- */
 
 QMenu {
-    background-color: #202127;
-    color: #e6e7ec;
-    border: 1px solid rgba(255, 255, 255, 22);
+    background-color: #232630;
+    color: #e4e6ec;
+    border: 1px solid rgba(255, 255, 255, 18);
     border-radius: 9px;
     padding: 6px;
 }
@@ -267,24 +310,24 @@ QMenu::item {
 }
 
 QMenu::item:selected {
-    background: rgba(108, 140, 255, 80);
+    background: rgba(138, 147, 168, 26);
     color: #ffffff;
 }
 
 QMenu::item:disabled {
-    color: rgba(230, 231, 236, 60);
+    color: rgba(232, 234, 240, 55);
 }
 
 QMenu::separator {
     height: 1px;
-    background: rgba(255, 255, 255, 18);
+    background: rgba(255, 255, 255, 14);
     margin: 5px 8px;
 }
 
 QToolTip {
-    background-color: #202127;
-    color: #e6e7ec;
-    border: 1px solid rgba(255, 255, 255, 22);
+    background-color: #232630;
+    color: #e4e6ec;
+    border: 1px solid rgba(255, 255, 255, 18);
     border-radius: 6px;
     padding: 5px 8px;
 }
