@@ -16,15 +16,6 @@ from config import (
 )
 
 
-@pytest.fixture(autouse=True)
-def isolate_environ(monkeypatch):
-    """Remove provider env vars so tests do not inherit the host environment."""
-    for var in ("OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL",
-                "GEMINI_API_KEY", "OLLAMA_BASE_URL", "CUSTOM_BASE_URL"):
-        monkeypatch.delenv(var, raising=False)
-    monkeypatch.setenv("APPDATA", "")
-
-
 # -- parse_dotenv ---------------------------------------------------------
 
 class TestParseDotenv:
