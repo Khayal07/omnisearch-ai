@@ -35,8 +35,8 @@ QLineEdit#searchBar {
     background-color: rgba(15, 20, 35, 4);
     color: #23262e;
     border: 1px solid rgba(15, 20, 35, 14);
-    border-radius: 11px;
-    padding: 10px 12px;
+    border-radius: 12px;
+    padding: 12px 14px;
     font-size: 15px;
     selection-background-color: rgba(91, 100, 120, 28);
     selection-color: #ffffff;
@@ -77,8 +77,11 @@ QPushButton#newChatButton:pressed {
 
 QLabel#statusLabel {
     color: #6a7284;
-    font-size: 12px;
-    padding-right: 4px;
+    font-size: 11px;
+    background: rgba(91, 100, 120, 12);
+    border: 1px solid rgba(91, 100, 120, 42);
+    border-radius: 9px;
+    padding: 3px 10px;
 }
 
 QTextBrowser#streamOutput {
@@ -108,8 +111,8 @@ QListView#historyList {
 }
 
 QListView#historyList::item {
-    padding: 6px 10px;
-    border-radius: 6px;
+    padding: 2px 6px;
+    border-radius: 8px;
 }
 
 QListView#historyList::item:hover {
@@ -118,7 +121,17 @@ QListView#historyList::item:hover {
 
 QListView#historyList::item:selected {
     background: rgba(91, 100, 120, 18);
-    color: #1f2533;
+}
+
+QLabel#historyTitle {
+    color: #23262e;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QLabel#historyMeta {
+    color: rgba(35, 38, 46, 105);
+    font-size: 11px;
 }
 
 /* ---- Custom scrollbars (app-wide) ------------------------------- */

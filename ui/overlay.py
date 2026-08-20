@@ -42,7 +42,7 @@ from utils.system_info import centered_rect, screen_for_cursor
 from core.ai_engine import AIEngine
 
 from .history import HistoryStore
-from .components import SearchBar, StreamingMarkdown
+from .components import HistoryRow, SearchBar, StreamingMarkdown
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ _SIZE_UPDATE_DELAY_MS = 50
 _CARD_PAD = 24
 _OUTER_PAD = 42
 _ROW_SPACING = 10
-_HISTORY_ROW_H = 34
+_HISTORY_ROW_H = 46
 _HISTORY_MAX_H = 260
 
 
@@ -454,7 +454,11 @@ class Overlay(QWidget):
             item = QListWidgetItem(title)
             item.setToolTip(title)
             item.setData(Qt.UserRole, row["id"])
+            ts = float(row.get("updated_at") or row.get("created_at") or 0)
+            row_widget = HistoryRow(title, ts)
+            item.setSizeHint(row_widget.sizeHint())
             widget.addItem(item)
+            widget.setItemWidget(item, row_widget)
         if widget.count() == 0:
             self._hide_history()
             return

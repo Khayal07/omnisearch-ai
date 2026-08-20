@@ -2,9 +2,49 @@
 
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QLineEdit, QTextBrowser
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QTextBrowser,
+    QVBoxLayout,
+    QWidget,
+)
+
+
+def relative_time(timestamp: float, now: float | None = None) -> str:
+    """Human-friendly relative timestamp, e.g. 'just now', '5m ago', '2h ago'."""
+    now = time.time() if now is None else now
+    delta = max(0.0, now - float(timestamp))
+    if delta < 45:
+        return "just now"
+    if delta < 3600:
+        return f"{int(delta // 60)}m ago"
+    if delta < 86400:
+        return f"{int(delta // 3600)}h ago"
+    if delta < 7 * 86400:
+        return f"{int(delta // 86400)}d ago"
+    return time.strftime("%b %d", time.localtime(float(timestamp)))
+
+
+class HistoryRow(QWidget):
+    """Two-line history item: title + relative-time metadata."""
+
+    def __init__(self, title: str, timestamp: float, parent=None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 3, 8, 3)
+        layout.setSpacing(1)
+        self.title = QLabel(title, self)
+        self.title.setObjectName("historyTitle")
+        self.meta = QLabel(relative_time(timestamp), self)
+        self.meta.setObjectName("historyMeta")
+        layout.addWidget(self.title)
+        layout.addWidget(self.meta)
 
 
 class SearchBar(QLineEdit):
