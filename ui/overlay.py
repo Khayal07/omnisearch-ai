@@ -18,6 +18,7 @@ from PySide6.QtCore import (
     QEasingCurve,
     QEvent,
     QPropertyAnimation,
+    QRect,
     Qt,
     QTimer,
     Signal,
@@ -49,7 +50,15 @@ _STYLES_DIR = Path(__file__).resolve().parent.parent / "styles"
 _FOCUS_OUT_GRACE_MS = 150
 _FADE_IN_MS = 120
 _FADE_OUT_MS = 90
-_COMPACT_H = 122
+_MIN_H = 122
+_MAX_H = 760
+_RESIZE_MS = 180
+_SIZE_UPDATE_DELAY_MS = 50
+_CARD_PAD = 24
+_OUTER_PAD = 42
+_ROW_SPACING = 10
+_HISTORY_ROW_H = 34
+_HISTORY_MAX_H = 260
 
 
 def theme_stylesheet(theme: str) -> str:
@@ -96,10 +105,11 @@ class Overlay(QWidget):
         self.setObjectName("overlayRoot")
 
         self._width = 720
-        self._height = 560
-        self._compact_h = _COMPACT_H
         self._animations_enabled = bool(animations)
         self._animating = False
+        self._resize_animating = False
+        self._resize_anim: QPropertyAnimation | None = None
+        self._size_timer: QTimer | None = None
         self._programmatic_hide = False
         self._busy = False
         self._engine: AIEngine | None = None
@@ -114,6 +124,9 @@ class Overlay(QWidget):
 
     def set_animations(self, enabled: bool) -> None:
         self._animations_enabled = bool(enabled)
+        if self._resize_animating and self._resize_anim is not None:
+            self._resize_anim.stop()
+            self._resize_animating = False
         if not self._animations_enabled and self._animating:
             self._animation.stop()
             self.setWindowOpacity(1.0)
@@ -189,6 +202,12 @@ class Overlay(QWidget):
         )
         self.hint.setObjectName("footerHint")
         layout.addWidget(self.hint)
+
+        # Idle state is a single slim search bar; header/output/hint appear
+        # only when the overlay needs to expand.
+        self.header.hide()
+        self.output.hide()
+        self.hint.hide()
 
         outer.addWidget(self.card)
         self.search.setFocusProxy(None)
@@ -284,10 +303,11 @@ class Overlay(QWidget):
     def _on_stream_start(self, provider: str) -> None:
         self.status.setText(f"streaming · {provider}")
         self.status.show()
-        self._expanded()
+        self._update_size_state()
 
     def _on_stream_chunk(self, delta: str) -> None:
         self.output.add_stream(delta)
+        self._schedule_size_update()
 
     def _on_stream_done(self, full: str, provider: str = "") -> None:
         anchor = f" · {provider}" if provider else ""
@@ -317,9 +337,9 @@ class Overlay(QWidget):
         self._update_size_state()
 
     def setDefaultSize(self) -> None:
-        self.resize(self._width, self._height)
+        self.resize(self._width, _MIN_H)
 
-    # -- compact / expanded sizing -----------------------------------------
+    # -- adaptive sizing ---------------------------------------------------
 
     def _needs_expansion(self) -> bool:
         return bool(
@@ -329,25 +349,78 @@ class Overlay(QWidget):
             or self.history_list.isVisible()
         )
 
+    @property
+    def _min_h(self) -> int:
+        return _MIN_H
+
+    def _max_h(self) -> int:
+        screen = screen_for_cursor() or self.screen()
+        avail = screen.availableGeometry() if screen is not None else None
+        if avail is None:
+            return _MAX_H
+        return max(_MIN_H, min(_MAX_H, int(avail.height() * 0.85)))
+
+    def _target_h(self) -> int:
+        """Height the overlay should have for its current visible state."""
+        parts: list[int] = []
+        if self.header.isVisible():
+            parts.append(max(24, self.header.sizeHint().height()))
+        parts.append(max(36, self.search.sizeHint().height()))
+        if self.history_list.isVisible():
+            rows = self.history_list.count()
+            parts.append(max(64, min(_HISTORY_MAX_H, rows * _HISTORY_ROW_H + 12)))
+        if self.output.isVisible():
+            doc_h = int(self.output.document().size().height())
+            parts.append(max(70, doc_h + 6))
+        if self.hint.isVisible():
+            parts.append(max(14, self.hint.sizeHint().height()))
+        inner = sum(parts) + _ROW_SPACING * max(0, len(parts) - 1)
+        return max(_MIN_H, min(self._max_h(), _OUTER_PAD + _CARD_PAD + inner))
+
     def _update_size_state(self) -> None:
-        if self._needs_expansion():
-            self._expanded()
+        expanded = self._needs_expansion()
+        self.header.setVisible(expanded)
+        self.output.setVisible(expanded)
+        self.hint.setVisible(expanded)
+        self._resize_to_h(self._target_h())
+
+    def _resize_to_h(self, target: int) -> None:
+        target = max(_MIN_H, min(self._max_h(), target))
+        # Qt's QLayout sets the top-level minimum size from the layout's
+        # minimum while children are visible, and never shrinks it back when
+        # they hide. Reset it so we are free to animate the window down.
+        self.setMinimumSize(0, 0)
+        cur = self.geometry()
+        if cur.height() == target:
+            return
+        new_geo = QRect(cur.x(), cur.y() + (cur.height() - target) // 2,
+                        self._width, target)
+        if self._animations_enabled:
+            if self._resize_animating and self._resize_anim is not None:
+                self._resize_anim.stop()
+            anim = QPropertyAnimation(self, b"geometry", self)
+            anim.setDuration(_RESIZE_MS)
+            anim.setStartValue(cur)
+            anim.setEndValue(new_geo)
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+            anim.finished.connect(self._on_resize_finished)
+            self._resize_anim = anim
+            self._resize_animating = True
+            anim.start()
         else:
-            self._compact()
+            self.setGeometry(new_geo)
 
-    def _compact(self) -> None:
-        if self.height() != self._compact_h and not self._animating:
-            self.header.hide()
-            self.output.hide()
-            self.hint.hide()
-            self.resize(self._width, self._compact_h)
+    def _on_resize_finished(self) -> None:
+        self._resize_animating = False
 
-    def _expanded(self) -> None:
-        if self.height() != self._height and not self._animating:
-            self.header.show()
-            self.output.show()
-            self.hint.show()
-            self.resize(self._width, self._height)
+    def _schedule_size_update(self) -> None:
+        """Coalesce resize requests fired mid-stream to avoid layout thrash."""
+        if self._size_timer is None:
+            self._size_timer = QTimer(self)
+            self._size_timer.setSingleShot(True)
+            self._size_timer.setInterval(_SIZE_UPDATE_DELAY_MS)
+            self._size_timer.timeout.connect(self._update_size_state)
+        self._size_timer.start()
 
     # -- interaction between search list and size --------------------------
 
@@ -424,7 +497,9 @@ class Overlay(QWidget):
         if screen is None:
             self.center()
         else:
-            self.setGeometry(centered_rect(screen.availableGeometry(), self._width, self._height))
+            self.setGeometry(
+                centered_rect(screen.availableGeometry(), self._width, self._target_h())
+            )
 
         if inject_clipboard:
             self._maybe_pull_clipboard()
@@ -453,7 +528,7 @@ class Overlay(QWidget):
     def center(self) -> None:
         screen = screen_for_cursor()
         geo = screen.availableGeometry() if screen is not None else self.screen().availableGeometry()
-        self.setGeometry(centered_rect(geo, self._width, self._height))
+        self.setGeometry(centered_rect(geo, self._width, self._target_h()))
 
     def _maybe_pull_clipboard(self) -> None:
         try:

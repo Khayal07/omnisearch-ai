@@ -31,23 +31,29 @@ def overlay(qtbot):
 
 
 class TestOverlaySizing:
-    def test_expands_and_compacts(self, overlay, qtbot):
-        overlay.setDefaultSize()
-        overlay.show()
-        overlay.search.setText("hello")
-        assert overlay.height() == 560
-        overlay.search.clear()
-        assert overlay.height() == 122
-        overlay.dismiss()
+    def test_expands_and_compacts(self, qtbot):
+        win = Overlay(animations=False)
+        qtbot.addWidget(win)
+        win.setDefaultSize()
+        win.show()
+        win.search.setText("hello")
+        assert win.height() > win._min_h
+        win.search.clear()
+        assert win.height() == win._min_h
+        win.dismiss()
 
-    def test_output_keeps_expanded(self, overlay, qtbot):
-        overlay.setDefaultSize()
-        overlay.show()
-        overlay.output.begin_stream()
-        overlay.output.add_stream("content here")
-        overlay.search.clear()
-        assert overlay.height() == 560
-        overlay.dismiss()
+    def test_output_keeps_expanded(self, qtbot):
+        win = Overlay(animations=False)
+        qtbot.addWidget(win)
+        win.setDefaultSize()
+        win.show()
+        win.output.begin_stream()
+        win.output.add_stream("content here")
+        win._update_size_state()  # what the stream chunk timer would trigger
+        win.search.clear()
+        win._update_size_state()
+        assert win.height() > win._min_h
+        win.dismiss()
 
 
 class TestOverlayAnimations:
@@ -155,7 +161,7 @@ class TestOverlayWindow:
 
     def test_default_size(self, overlay):
         assert overlay.width() == 720
-        assert overlay.height() == 560
+        assert overlay.height() == overlay._min_h
 
     def test_search_bar_present(self, overlay):
         assert overlay.findChild(SearchBar) is not None
