@@ -14,7 +14,10 @@ Built with **Python 3.12** + **PySide6**. Windows only.
 
 - **Global hotkey overlay** — frameless, always-on-top, cursor-snapped search
   window (`Alt+Space` by default, rebindable from Settings; falls back to
-  `Alt+`` ` on hotkey conflict). Compact mode collapses the window when idle.
+  `Alt+`` ` on hotkey conflict). The window is **height-adaptive**: it opens as a
+  slim search bar and smoothly animates open/closed (OutCubic, stays vertically
+  centered) as you type, browse history, or stream answers — no fixed-height
+  jumps or flicker. History items are two-line rows (title + relative time).
 - **Streaming AI answers** — SSE / NDJSON token streaming via `httpx.AsyncClient`,
   rendered with live Markdown (Ctrl+Scroll zooms the transcript).
 - **Multiple providers** — OpenAI-compatible (`/chat/completions`),
@@ -35,7 +38,10 @@ Built with **Python 3.12** + **PySide6**. Windows only.
 - **System tray** — programmatic icon, menu (`Toggle Overlay / Settings… / Quit`),
   single/double click summons the overlay.
 - **Single instance** — named mutex; a second launch wakes the running instance.
-- **Dark & light themes** — app-wide stylesheets applied from a single config.
+- **Dark & light themes** — app-wide stylesheets in a restrained **muted
+  steel/slate** palette (no neon gradients, no pure black): deep-ink card, hairline
+  borders, theme-aware custom scrollbars everywhere, refined controls and menus.
+  The Settings dialog is **frameless** with a draggable header and close button.
 - **Secure keys** — API keys are DPAPI-encrypted (current-user only) when entered
   via the Settings dialog; `.env` and OS environment are also supported.
 
@@ -94,7 +100,7 @@ dependencies.
 4. **Quick actions** — prefix your prompt with `/code`, `/explain`, `/sum`,
    `/web`, or `/fix` to use a specialised system prompt.
 5. **Settings** (tray menu) — provider + model, theme, hotkey capture, API keys,
-   auto-start at login.
+   auto-start at login, in a frameless dialog you can drag by its header.
 6. Leave it running in the tray — a second launch finds the live instance
    instead of starting a duplicate.
 
@@ -140,10 +146,10 @@ core/
   hotkey.py             Win32 RegisterHotKey + QAbstractNativeEventFilter
   single_instance.py    named-mutex enforcement + wake-broadcast
 ui/
-  overlay.py            frameless search Overlay window (compact/expanded)
-  components.py         SearchBar, StreamingMarkdown (Ctrl+Scroll zoom)
+  overlay.py            frameless, height-adaptive search Overlay window
+  components.py         SearchBar, HistoryRow, StreamingMarkdown (Ctrl+Scroll zoom)
   history.py            SQLite HistoryStore: conversations + messages + legacy flat Q&A
-  settings_dialog.py    settings panel + HotkeyCapture key recorder
+  settings_dialog.py    frameless settings panel, draggable header, HotkeyCapture recorder
 utils/
   system_info.py        DPI awareness, screen/cursor geometry, memory stats
   logger.py             rotating file + console logging
